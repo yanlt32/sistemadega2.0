@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatórios - Adega System</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h3>🍷 Adega</h3>
+            </div>
+            <ul class="sidebar-menu">
+                <li onclick="window.location.href='/dashboard.html'"><i>📊</i> <span>Dashboard</span></li>
+                <li onclick="window.location.href='/produtos.html'"><i>📦</i> <span>Produtos</span></li>
+                <li onclick="window.location.href='/categorias.html'"><i>🏷️</i> <span>Categorias</span></li>
+                <li onclick="window.location.href='/vendas.html'"><i>💰</i> <span>Vendas</span></li>
+                <li class="active"><i>📈</i> <span>Relatórios</span></li>
+            </ul>
+        </aside>
+        
+        <main class="main-content">
+            <div class="top-bar">
+                <h1>Relatórios</h1>
+                <div class="user-info">
+                    <span id="userNome"></span>
+                    <button class="logout-btn" id="logoutBtn">Sair</button>
+                </div>
+            </div>
+            
+            <div class="cards-container">
+                <div class="card">
+                    <h3>Lucro Hoje</h3>
+                    <div class="value" id="lucroDiarioValor">R$ 0,00</div>
+                </div>
+                
+                <div class="card">
+                    <h3>Lucro do Mês</h3>
+                    <div class="value" id="lucroMensalValor">R$ 0,00</div>
+                </div>
+            </div>
+            
+            <div class="cards-container">
+                <div class="card">
+                    <h3>Produto Mais Vendido</h3>
+                    <div id="produtoMaisVendido">
+                        <p>Carregando...</p>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h3>Categoria Mais Vendida</h3>
+                    <div id="categoriaMaisVendida">
+                        <p>Carregando...</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3>Vendas por Período</h3>
+                    <select id="periodoRelatorio">
+                        <option value="dia">Por dia</option>
+                        <option value="mes">Por mês</option>
+                        <option value="ano">Por ano</option>
+                    </select>
+                </div>
+                
+                <div style="height: 300px; margin-bottom: 20px;">
+                    <canvas id="graficoRelatorio"></canvas>
+                </div>
+                
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Período</th>
+                                <th>Qtd. Vendas</th>
+                                <th>Total</th>
+                                <th>Lucro</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelaVendasPeriodo"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>

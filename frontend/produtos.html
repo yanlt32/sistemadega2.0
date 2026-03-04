@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Produtos - Adega System</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <!-- Fonte Inter para melhor aparência -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h3>🍷 Adega</h3>
+            </div>
+            <ul class="sidebar-menu">
+                <li onclick="window.location.href='/dashboard.html'"><i>📊</i> <span>Dashboard</span></li>
+                <li class="active"><i>📦</i> <span>Produtos</span></li>
+                <li onclick="window.location.href='/vendas.html'"><i>💰</i> <span>Vendas</span></li>
+                <li onclick="window.location.href='/categorias.html'"><i>🏷️</i> <span>Categorias</span></li>
+                <li onclick="window.location.href='/relatorios.html'"><i>📈</i> <span>Relatórios</span></li>
+            </ul>
+        </aside>
+        
+        <main class="main-content">
+            <div class="top-bar">
+                <h1>Produtos</h1>
+                <div class="user-info">
+                    <span id="userNome"></span>
+                    <button class="logout-btn" id="logoutBtn">Sair</button>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+                    <button class="btn btn-primary" id="btnNovoProduto">+ Novo Produto</button>
+                </div>
+                
+                <div class="search-bar">
+                    <input type="text" id="buscaProduto" placeholder="Buscar produto... (Ctrl + K)">
+                    <select id="filtroCategoria">
+                        <option value="todas">Todas categorias</option>
+                        <!-- Categorias serão carregadas via JavaScript -->
+                    </select>
+                </div>
+                
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>Categoria</th>
+                                <th>Tipo</th>
+                                <th>Preço Custo</th>
+                                <th>Preço Venda</th>
+                                <th>Estoque</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="produtosTable"></tbody>
+                    </table>
+                </div>
+                
+                <div class="pagination" id="paginacao"></div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Modal Produto -->
+    <div id="modalProduto" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="modalTitulo">Novo Produto</h2>
+            <form id="formProduto">
+                <input type="hidden" id="produtoId">
+                
+                <div class="form-group">
+                    <label for="produtoNome">Nome do Produto</label>
+                    <input type="text" id="produtoNome" placeholder="Ex: Cerveja Brahma" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="produtoCategoria">Categoria</label>
+                    <select id="produtoCategoria" required>
+                        <option value="">Selecione uma categoria</option>
+                        <!-- Categorias serão carregadas via JavaScript -->
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="produtoTipo">Tipo</label>
+                    <select id="produtoTipo" required>
+                        <option value="">Selecione uma categoria primeiro</option>
+                        <!-- Tipos serão carregados via JavaScript quando categoria for selecionada -->
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="produtoPrecoCusto">Preço de Custo (R$)</label>
+                    <input type="number" id="produtoPrecoCusto" step="0.01" min="0" placeholder="0.00" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="produtoPrecoVenda">Preço de Venda (R$)</label>
+                    <input type="number" id="produtoPrecoVenda" step="0.01" min="0" placeholder="0.00" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="produtoQuantidade">Quantidade em Estoque</label>
+                    <input type="number" id="produtoQuantidade" min="0" value="0">
+                </div>
+                
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button type="button" class="btn btn-secondary" onclick="Produtos.fecharModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>
