@@ -133,7 +133,35 @@ const API = {
             method: 'DELETE'
         });
     },
-    
+    // ===== VENDAS - CRUD COMPLETO =====
+async listarVendas(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    return this.request(`/vendas${queryString ? '?' + queryString : ''}`);
+},
+
+async buscarVenda(id) {
+    return this.request(`/vendas/${id}`);
+},
+
+async atualizarVenda(id, dados) {
+    return this.request(`/vendas/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(dados)
+    });
+},
+
+async excluirVenda(id) {
+    return this.request(`/vendas/${id}`, {
+        method: 'DELETE'
+    });
+},
+
+async cancelarVenda(id, motivo) {
+    return this.request(`/vendas/${id}/cancelar`, {
+        method: 'PUT',
+        body: JSON.stringify({ motivo })
+    });
+},
     // ===== TIPOS =====
     async listarTipos() {
         return this.request('/tipos');
@@ -184,3 +212,4 @@ const API = {
         return this.request(`/relatorios/vendas-por-periodo?periodo=${periodo}`);
     }
 };
+
