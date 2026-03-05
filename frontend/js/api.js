@@ -1,5 +1,13 @@
 const API = {
-    baseURL: 'http://' + window.location.hostname + ':3000/api',
+    // Detectar ambiente (desenvolvimento ou produção)
+    get baseURL() {
+        // Se estiver no Render (produção)
+        if (window.location.hostname.includes('onrender.com')) {
+            return `https://${window.location.hostname}/api`;
+        }
+        // Se estiver em desenvolvimento local
+        return `http://${window.location.hostname}:3000/api`;
+    },
     
     getToken() {
         return localStorage.getItem('token');
@@ -109,6 +117,30 @@ const API = {
         return this.request(`/vendas${queryString ? '?' + queryString : ''}`);
     },
     
+    async buscarVenda(id) {
+        return this.request(`/vendas/${id}`);
+    },
+    
+    async atualizarVenda(id, dados) {
+        return this.request(`/vendas/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(dados)
+        });
+    },
+    
+    async excluirVenda(id) {
+        return this.request(`/vendas/${id}`, {
+            method: 'DELETE'
+        });
+    },
+    
+    async cancelarVenda(id, motivo) {
+        return this.request(`/vendas/${id}/cancelar`, {
+            method: 'PUT',
+            body: JSON.stringify({ motivo })
+        });
+    },
+    
     // ===== CATEGORIAS =====
     async listarCategorias() {
         return this.request('/categorias');
@@ -133,35 +165,7 @@ const API = {
             method: 'DELETE'
         });
     },
-    // ===== VENDAS - CRUD COMPLETO =====
-async listarVendas(params = {}) {
-    const queryString = new URLSearchParams(params).toString();
-    return this.request(`/vendas${queryString ? '?' + queryString : ''}`);
-},
-
-async buscarVenda(id) {
-    return this.request(`/vendas/${id}`);
-},
-
-async atualizarVenda(id, dados) {
-    return this.request(`/vendas/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(dados)
-    });
-},
-
-async excluirVenda(id) {
-    return this.request(`/vendas/${id}`, {
-        method: 'DELETE'
-    });
-},
-
-async cancelarVenda(id, motivo) {
-    return this.request(`/vendas/${id}/cancelar`, {
-        method: 'PUT',
-        body: JSON.stringify({ motivo })
-    });
-},
+    
     // ===== TIPOS =====
     async listarTipos() {
         return this.request('/tipos');
@@ -212,4 +216,3 @@ async cancelarVenda(id, motivo) {
         return this.request(`/relatorios/vendas-por-periodo?periodo=${periodo}`);
     }
 };
-

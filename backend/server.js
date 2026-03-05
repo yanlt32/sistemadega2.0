@@ -1,13 +1,22 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const os = require('os');
+const http = require('http');
+const socketIo = require('socket.io');
 const { initializeDatabase, criarUsuarioPadrao } = require('./models/database');
 
 const app = express();
-const PORT = 3000;
+const server = http.createServer(app);
+const io = socketIo(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST", "PUT", "DELETE"]
+    }
+});
 
-// Configurar CORS para permitir conexões de outros dispositivos
+const PORT = process.env.PORT || 3000;
+
+// Configurar CORS
 app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -22,7 +31,13 @@ console.log('🔄 Inicializando banco de dados...');
 initializeDatabase();
 criarUsuarioPadrao();
 
-// Rotas
+// Middleware para emitir eventos WebSocket
+app.use((req, res, next) => {
+    req.io = io;
+    next();
+});
+
+// Rotas da API
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/produtos', require('./routes/produtoRoutes'));
 app.use('/api/vendas', require('./routes/vendaRoutes'));
@@ -47,6 +62,10 @@ app.get('/vendas.html', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/vendas.html'));
 });
 
+app.get('/historico-vendas.html', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/historico-vendas.html'));
+});
+
 app.get('/categorias.html', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/categorias.html'));
 });
@@ -55,55 +74,31 @@ app.get('/relatorios.html', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/relatorios.html'));
 });
 
-// Rota para obter informações de rede
-app.get('/api/network-info', (req, res) => {
-    const interfaces = os.networkInterfaces();
-    const addresses = [];
+// Rota de saúde
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// WebSocket connection
+io.on('connection', (socket) => {
+    console.log('🟢 Cliente conectado:', socket.id);
     
-    for (const name in interfaces) {
-        for (const iface of interfaces[name]) {
-            if (iface.family === 'IPv4' && !iface.internal) {
-                addresses.push({
-                    interface: name,
-                    address: iface.address
-                });
-            }
-        }
-    }
-    
-    res.json({
-        localUrl: `http://localhost:${PORT}`,
-        networkUrls: addresses.map(a => ({
-            name: a.interface,
-            url: `http://${a.address}:${PORT}`
-        }))
+    socket.on('disconnect', () => {
+        console.log('🔴 Cliente desconectado:', socket.id);
     });
 });
 
-// Tratamento de erros global
+// Tratamento de erros
 app.use((err, req, res, next) => {
     console.error('❌ Erro:', err.stack);
     res.status(500).json({ error: 'Algo deu errado!' });
 });
 
-// 404 handler
 app.use((req, res) => {
     res.status(404).json({ error: 'Rota não encontrada' });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n🚀 Servidor rodando na porta ${PORT}`);
-    console.log(`📱 Acessos:`);
-    console.log(`   - Local: http://localhost:${PORT}`);
-    
-    // Mostrar endereços de rede
-    const interfaces = os.networkInterfaces();
-    for (const name in interfaces) {
-        for (const iface of interfaces[name]) {
-            if (iface.family === 'IPv4' && !iface.internal) {
-                console.log(`   - Rede (${name}): http://${iface.address}:${PORT}`);
-            }
-        }
-    }
-    console.log('');
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Servidor rodando na porta ${PORT}`);
+    console.log(`📱 Ambiente: ${process.env.NODE_ENV || 'desenvolvimento'}`);
 });
