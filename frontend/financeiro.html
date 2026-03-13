@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financeiro - PodPá</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/style-mobile.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="company-logo">
+                    <img src="/assets/logo.png" alt="PodPá Logo" onerror="this.style.display='none'">
+                    <h2>PODPÁ</h2>
+                </div>
+            </div>
+            <ul class="sidebar-menu">
+                <li onclick="window.location.href='/dashboard.html'">📊 <span>Dashboard</span></li>
+                <li onclick="window.location.href='/produtos.html'">📦 <span>Produtos</span></li>
+                                <li onclick="window.location.href='/categorias.html'">🏷️ <span>Categorias</span></li>
+                <li onclick="window.location.href='/vendas.html'">💰 <span>Vendas</span></li>
+                <li onclick="window.location.href='/historico-vendas.html'">📋 <span>Histórico</span></li>
+                <li onclick="window.location.href='/relatorios.html'">📈 <span>Relatórios</span></li>
+                <li onclick="window.location.href='/gastos.html'">💸 <span>Gastos</span></li>
+                <li class="active">📈 <span>Financeiro</span></li>
+
+            </ul>
+        </aside>
+        
+        <main class="main-content">
+            <div class="top-bar">
+                <h1>Relatório Financeiro</h1>
+                <div class="user-info">
+                    <span id="userNome"></span>
+                    <span id="userRole" class="badge"></span>
+                    <button class="logout-btn" id="logoutBtn">Sair</button>
+                </div>
+            </div>
+            
+            <!-- Seletor de Período -->
+            <div class="card" style="margin-bottom: 20px;">
+                <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                    <div>
+                        <label>Período:</label>
+                        <select id="periodoTipo" style="margin-left: 10px; padding: 8px;">
+                            <option value="semana">Semana</option>
+                            <option value="mes" selected>Mês</option>
+                            <option value="ano">Ano</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button class="btn btn-primary" id="btnAtualizar">Atualizar</button>
+                        <button class="btn btn-warning" id="btnExportarExcel">📥 Exportar Excel</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Cards de Resumo -->
+            <div class="dashboard-stats">
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <h3>Total de Vendas</h3>
+                    </div>
+                    <div class="stat-value" id="totalVendas">R$ 0,00</div>
+                    <div class="stat-label">Período selecionado</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <h3>Total de Gastos</h3>
+                    </div>
+                    <div class="stat-value" id="totalGastos" style="color: var(--danger);">R$ 0,00</div>
+                    <div class="stat-label">Período selecionado</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <h3>Lucro Líquido</h3>
+                    </div>
+                    <div class="stat-value" id="lucroLiquido">R$ 0,00</div>
+                    <div class="stat-label">Vendas - Gastos</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <h3>Margem de Lucro</h3>
+                    </div>
+                    <div class="stat-value" id="margemLucro">0%</div>
+                    <div class="stat-label">Percentual</div>
+                </div>
+            </div>
+            
+            <!-- Gráficos -->
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>Vendas vs Gastos</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="graficoComparativo"></canvas>
+                    </div>
+                </div>
+                
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>Distribuição de Gastos</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="graficoGastos"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tabelas de Detalhamento -->
+            <div class="quick-tables">
+                <div class="quick-table">
+                    <div class="quick-table-header">
+                        <h3>📊 Vendas por Período</h3>
+                    </div>
+                    <div class="table-container">
+                        <table id="tabelaVendasPeriodo">
+                            <thead>
+                                <tr>
+                                    <th>Período</th>
+                                    <th>Vendas</th>
+                                    <th>Lucro</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="quick-table">
+                    <div class="quick-table-header">
+                        <h3>💸 Gastos por Categoria</h3>
+                    </div>
+                    <div class="table-container">
+                        <table id="tabelaGastosCategoria">
+                            <thead>
+                                <tr>
+                                    <th>Categoria</th>
+                                    <th>Valor</th>
+                                    <th>%</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Últimos Registros -->
+            <div class="quick-table">
+                <div class="quick-table-header">
+                    <h3>🕐 Últimos 10 Registros</h3>
+                </div>
+                <div class="table-container">
+                    <table id="tabelaUltimosRegistros">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Tipo</th>
+                                <th>Descrição</th>
+                                <th>Valor</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/app.js"></script>
+    <script src="/js/realtime.js"></script>
+    <script src="/js/financeiro.js"></script>
+</body>
+</html>

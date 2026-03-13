@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gastos - PodPá</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/style-mobile.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="company-logo">
+                    <img src="/assets/logo.png" alt="PodPá Logo" onerror="this.style.display='none'">
+                    <h2>PODPÁ</h2>
+                </div>
+            </div>
+            <ul class="sidebar-menu">
+                <li onclick="window.location.href='/dashboard.html'">📊 <span>Dashboard</span></li>
+                <li onclick="window.location.href='/produtos.html'">📦 <span>Produtos</span></li>
+                <li onclick="window.location.href='/vendas.html'">💰 <span>Vendas</span></li>
+                <li onclick="window.location.href='/historico-vendas.html'">📋 <span>Histórico</span></li>
+
+                <li onclick="window.location.href='/categorias.html'">🏷️ <span>Categorias</span></li>
+                <li onclick="window.location.href='/relatorios.html'">📈 <span>Relatórios</span></li>
+                <li class="active">💸 <span>Gastos</span></li>
+                <li onclick="window.location.href='/financeiro.html'">📈 <span>Financeiro</span></li>
+            </ul>
+        </aside>
+        
+        <main class="main-content">
+            <div class="top-bar">
+                <h1>Gestão de Gastos</h1>
+                <div class="user-info">
+                    <span id="userNome"></span>
+                    <span id="userRole" class="badge"></span>
+                    <button class="logout-btn" id="logoutBtn">Sair</button>
+                </div>
+            </div>
+            
+            <!-- Cards de Resumo Rápido -->
+            <div class="dashboard-stats">
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <h3>Gastos do Mês</h3>
+                    </div>
+                    <div class="stat-value" id="gastosMes">R$ 0,00</div>
+                    <div class="stat-label">Total de gastos</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <h3>Maior Gasto</h3>
+                    </div>
+                    <div class="stat-value" id="maiorGasto">R$ 0,00</div>
+                    <div class="stat-label">Este mês</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <h3>Quantidade</h3>
+                    </div>
+                    <div class="stat-value" id="qtdGastos">0</div>
+                    <div class="stat-label">Gastos registrados</div>
+                </div>
+            </div>
+            
+            <!-- Botões de Ação -->
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button class="btn btn-primary" id="btnNovoGasto">+ Novo Gasto</button>
+                <button class="btn btn-warning" id="btnResumoMensal">📊 Resumo Mensal</button>
+                <button class="btn btn-secondary" id="btnExportarExcel">📥 Exportar Excel</button>
+            </div>
+            
+            <!-- Filtros -->
+            <div class="search-bar" style="margin-bottom: 20px;">
+                <select id="filtroMes">
+                    <option value="1">Janeiro</option>
+                    <option value="2">Fevereiro</option>
+                    <option value="3">Março</option>
+                    <option value="4">Abril</option>
+                    <option value="5">Maio</option>
+                    <option value="6">Junho</option>
+                    <option value="7">Julho</option>
+                    <option value="8">Agosto</option>
+                    <option value="9">Setembro</option>
+                    <option value="10">Outubro</option>
+                    <option value="11">Novembro</option>
+                    <option value="12">Dezembro</option>
+                </select>
+                <input type="number" id="filtroAno" placeholder="Ano" value="2026">
+                <select id="filtroCategoria">
+                    <option value="">Todas categorias</option>
+                </select>
+                <button class="btn btn-primary" id="btnFiltrar">Filtrar</button>
+                <button class="btn btn-secondary" id="btnLimparFiltros">Limpar</button>
+            </div>
+            
+            <!-- Tabela de Gastos -->
+            <div class="quick-table">
+                <div class="table-container">
+                    <table id="tabelaGastos">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Descrição</th>
+                                <th>Categoria</th>
+                                <th>Valor</th>
+                                <th>Pagamento</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                
+                <div class="pagination" id="paginacao"></div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Modal Novo Gasto -->
+    <div id="modalGasto" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="modalTitulo">Novo Gasto</h2>
+            <form id="formGasto">
+                <input type="hidden" id="gastoId">
+                
+                <div class="form-group">
+                    <label for="gastoDescricao">Descrição</label>
+                    <input type="text" id="gastoDescricao" placeholder="Ex: Conta de luz" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="gastoValor">Valor (R$)</label>
+                    <input type="number" id="gastoValor" step="0.01" min="0" placeholder="0.00" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="gastoData">Data</label>
+                    <input type="date" id="gastoData" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="gastoCategoria">Categoria</label>
+                    <select id="gastoCategoria" required>
+                        <option value="">Selecione uma categoria</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="gastoPagamento">Forma de Pagamento</label>
+                    <select id="gastoPagamento">
+                        <option value="">Selecione</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="gastoObservacao">Observação</label>
+                    <textarea id="gastoObservacao" rows="2" placeholder="Observações adicionais..."></textarea>
+                </div>
+                
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button type="button" class="btn btn-secondary" onclick="Gastos.fecharModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal Resumo Mensal -->
+    <div id="modalResumo" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close" onclick="Gastos.fecharModalResumo()">&times;</span>
+            <h2>📊 Resumo Mensal</h2>
+            
+            <div style="display: flex; gap: 10px; margin: 20px 0;">
+                <select id="resumoMes">
+                    <option value="1">Janeiro</option>
+                    <option value="2">Fevereiro</option>
+                    <option value="3">Março</option>
+                    <option value="4">Abril</option>
+                    <option value="5">Maio</option>
+                    <option value="6">Junho</option>
+                    <option value="7">Julho</option>
+                    <option value="8">Agosto</option>
+                    <option value="9">Setembro</option>
+                    <option value="10">Outubro</option>
+                    <option value="11">Novembro</option>
+                    <option value="12">Dezembro</option>
+                </select>
+                <input type="number" id="resumoAno" value="2026">
+                <button class="btn btn-primary" onclick="Gastos.carregarResumo()">Carregar</button>
+            </div>
+            
+            <div id="resumoConteudo"></div>
+        </div>
+    </div>
+    
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/app.js"></script>
+    <script src="/js/realtime.js"></script>
+    <script src="/js/gastos.js"></script>
+</body>
+</html>

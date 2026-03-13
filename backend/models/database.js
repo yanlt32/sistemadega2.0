@@ -19,7 +19,7 @@ function initializeDatabase() {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT UNIQUE NOT NULL,
             tipo TEXT NOT NULL,
-            cor TEXT DEFAULT '#d4af37',
+            cor TEXT DEFAULT '#c4a747',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
 
@@ -99,17 +99,105 @@ function initializeDatabase() {
             FOREIGN KEY (dose_id) REFERENCES doses(id)
         )`);
 
-        // Criar tabela de vendas
+        // ===== NOVAS TABELAS =====
+        
+        // Criar tabela de formas_pagamento
+        db.run(`CREATE TABLE IF NOT EXISTS formas_pagamento (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT UNIQUE NOT NULL,
+            tipo TEXT DEFAULT 'normal',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+
+        // Inserir formas de pagamento padrão
+        db.run(`INSERT OR IGNORE INTO formas_pagamento (nome, tipo) VALUES 
+            ('Dinheiro', 'dinheiro'),
+            ('Débito', 'debito'),
+            ('Crédito', 'credito'),
+            ('Pix', 'pix')`);
+
+        // Criar tabela de categorias_gastos
+        db.run(`CREATE TABLE IF NOT EXISTS categorias_gastos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT UNIQUE NOT NULL,
+            descricao TEXT,
+            cor TEXT DEFAULT '#c4a747',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+
+        // Inserir categorias de gastos padrão
+        db.run(`INSERT OR IGNORE INTO categorias_gastos (nome, descricao, cor) VALUES 
+            ('Salários', 'Pagamento de funcionários', '#b91c3c'),
+            ('Aluguel', 'Aluguel do estabelecimento', '#c4a747'),
+            ('Água', 'Conta de água', '#2196f3'),
+            ('Luz', 'Conta de energia', '#ff9800'),
+            ('Internet', 'Internet e telefone', '#4caf50'),
+            ('Impostos', 'Impostos e taxas', '#f44336'),
+            ('Manutenção', 'Manutenção do espaço', '#9c27b0'),
+            ('Marketing', 'Publicidade e divulgação', '#e91e63'),
+            ('Fornecedores', 'Pagamento a fornecedores', '#3f51b5'),
+            ('Compras', 'Compra de mercadorias', '#00acc1'),
+            ('Equipamentos', 'Compra de equipamentos', '#7b1fa2'),
+            ('Outros', 'Outros gastos', '#607d8b')`);
+
+        // Criar tabela de gastos
+        db.run(`CREATE TABLE IF NOT EXISTS gastos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            descricao TEXT NOT NULL,
+            valor DECIMAL(10,2) NOT NULL,
+            data_gasto DATETIME DEFAULT CURRENT_TIMESTAMP,
+            categoria_id INTEGER,
+            forma_pagamento_id INTEGER,
+            observacao TEXT,
+            usuario_id INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (categoria_id) REFERENCES categorias_gastos(id),
+            FOREIGN KEY (forma_pagamento_id) REFERENCES formas_pagamento(id),
+            FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+        )`);
+
+        // Criar tabela de resumo_mensal
+        db.run(`CREATE TABLE IF NOT EXISTS resumo_mensal (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ano INTEGER NOT NULL,
+            mes INTEGER NOT NULL,
+            total_vendas DECIMAL(10,2) DEFAULT 0,
+            total_lucro DECIMAL(10,2) DEFAULT 0,
+            total_gastos DECIMAL(10,2) DEFAULT 0,
+            saldo_final DECIMAL(10,2) DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ano, mes)
+        )`);
+
+        // Criar tabela de movimentacoes_estoque
+        db.run(`CREATE TABLE IF NOT EXISTS movimentacoes_estoque (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            produto_id INTEGER,
+            dose_id INTEGER,
+            tipo TEXT NOT NULL,
+            quantidade INTEGER NOT NULL,
+            data_movimentacao DATETIME DEFAULT CURRENT_TIMESTAMP,
+            observacao TEXT,
+            usuario_id INTEGER,
+            FOREIGN KEY (produto_id) REFERENCES produtos(id),
+            FOREIGN KEY (dose_id) REFERENCES doses(id),
+            FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+        )`);
+
+        // Criar tabela de vendas (atualizada)
         db.run(`CREATE TABLE IF NOT EXISTS vendas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             data_venda DATETIME DEFAULT CURRENT_TIMESTAMP,
             total DECIMAL(10,2) NOT NULL,
             lucro DECIMAL(10,2) NOT NULL,
-            forma_pagamento TEXT NOT NULL,
+            forma_pagamento_id INTEGER,
+            forma_pagamento_text TEXT,
             usuario_id INTEGER,
             status TEXT DEFAULT 'concluida',
             observacao TEXT,
             tipo TEXT DEFAULT 'normal',
+            FOREIGN KEY (forma_pagamento_id) REFERENCES formas_pagamento(id),
             FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
         )`);
 
@@ -129,49 +217,6 @@ function initializeDatabase() {
             FOREIGN KEY (combo_id) REFERENCES combos(id)
         )`);
 
-        // Criar tabela de movimentacoes_estoque
-        db.run(`CREATE TABLE IF NOT EXISTS movimentacoes_estoque (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            produto_id INTEGER,
-            dose_id INTEGER,
-            tipo TEXT NOT NULL,
-            quantidade INTEGER NOT NULL,
-            data_movimentacao DATETIME DEFAULT CURRENT_TIMESTAMP,
-            observacao TEXT,
-            usuario_id INTEGER,
-            FOREIGN KEY (produto_id) REFERENCES produtos(id),
-            FOREIGN KEY (dose_id) REFERENCES doses(id),
-            FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
-        )`);
-
-        // Criar tabela de caixa
-        db.run(`CREATE TABLE IF NOT EXISTS caixa (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            data_abertura DATETIME DEFAULT CURRENT_TIMESTAMP,
-            data_fechamento DATETIME,
-            valor_inicial DECIMAL(10,2) DEFAULT 0,
-            valor_final DECIMAL(10,2),
-            total_vendas DECIMAL(10,2) DEFAULT 0,
-            total_lucro DECIMAL(10,2) DEFAULT 0,
-            observacao TEXT,
-            status TEXT DEFAULT 'aberto',
-            usuario_id INTEGER,
-            FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
-        )`);
-
-        // Criar tabela de movimentacoes_caixa
-        db.run(`CREATE TABLE IF NOT EXISTS movimentacoes_caixa (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            caixa_id INTEGER,
-            tipo TEXT NOT NULL,
-            valor DECIMAL(10,2) NOT NULL,
-            descricao TEXT,
-            data_movimentacao DATETIME DEFAULT CURRENT_TIMESTAMP,
-            usuario_id INTEGER,
-            FOREIGN KEY (caixa_id) REFERENCES caixa(id) ON DELETE CASCADE,
-            FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
-        )`);
-
         // Criar tabela de configurações
         db.run(`CREATE TABLE IF NOT EXISTS configuracoes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -183,10 +228,10 @@ function initializeDatabase() {
 
         // Inserir categorias padrão
         db.run(`INSERT OR IGNORE INTO categorias (nome, tipo, cor) VALUES 
-            ('Bebidas', 'bebida', '#d4af37'),
-            ('Comes', 'come', '#c41e3a'),
-            ('Doses', 'dose', '#d4af37'),
-            ('Combos', 'combo', '#c41e3a'),
+            ('Bebidas', 'bebida', '#c4a747'),
+            ('Comes', 'come', '#b91c3c'),
+            ('Doses', 'dose', '#c4a747'),
+            ('Combos', 'combo', '#b91c3c'),
             ('Outros', 'outro', '#666666')`);
 
         // Inserir tipos padrão
@@ -209,10 +254,9 @@ function initializeDatabase() {
             ('estoque_minimo', '5', 'number', 'Quantidade mínima para alerta de estoque'),
             ('tema', 'dark', 'text', 'Tema do sistema'),
             ('empresa_nome', 'PodPá', 'text', 'Nome da empresa'),
-            ('caixa_aberto', 'false', 'boolean', 'Status do caixa'),
-            ('ultimo_fechamento', '', 'text', 'Data do último fechamento')`);
+            ('ultimo_resumo_mensal', '', 'text', 'Data do último resumo mensal')`);
 
-        console.log('✅ Banco de dados PodPá inicializado!');
+        console.log('✅ Banco de dados PodPá inicializado com sucesso!');
     });
 }
 

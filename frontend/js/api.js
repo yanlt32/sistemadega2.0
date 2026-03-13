@@ -54,6 +54,65 @@ const API = {
             throw error;
         }
     },
+    // ===== GASTOS =====
+async listarGastos(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    return this.request(`/gastos${queryString ? '?' + queryString : ''}`);
+},
+
+async criarGasto(gasto) {
+    return this.request('/gastos', {
+        method: 'POST',
+        body: JSON.stringify(gasto)
+    });
+},
+
+async atualizarGasto(id, gasto) {
+    return this.request(`/gastos/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(gasto)
+    });
+},
+
+async excluirGasto(id) {
+    return this.request(`/gastos/${id}`, {
+        method: 'DELETE'
+    });
+},
+
+async listarCategoriasGastos() {
+    return this.request('/gastos/categorias/listar');
+},
+
+async criarCategoriaGasto(categoria) {
+    return this.request('/gastos/categorias', {
+        method: 'POST',
+        body: JSON.stringify(categoria)
+    });
+},
+
+async excluirCategoriaGasto(id) {
+    return this.request(`/gastos/categorias/${id}`, {
+        method: 'DELETE'
+    });
+},
+
+async listarFormasPagamento() {
+    return this.request('/gastos/formas-pagamento');
+},
+
+async resumoMensal(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    return this.request(`/gastos/resumo/mensal${queryString ? '?' + queryString : ''}`);
+},
+
+async exportarResumo(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    const url = `${this.baseURL}/gastos/exportar/resumo${queryString ? '?' + queryString : ''}`;
+    const token = this.getToken();
+    window.open(url + `&token=${token}`, '_blank');
+    return { success: true };
+},
     
     // ===== AUTH =====
     async login(username, password) {

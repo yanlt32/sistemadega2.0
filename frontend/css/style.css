@@ -1514,3 +1514,139 @@ tr:hover td {
     max-width: 45px !important;
     max-height: 45px !important;
 }
+
+/* ===== CORREÇÕES PARA TELA DE GASTOS NO MOBILE ===== */
+@media (max-width: 768px) {
+    /* Botões de ação */
+    .gastos-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        width: 100%;
+    }
+    
+    .gastos-actions .btn {
+        width: 100%;
+        padding: 14px !important;
+        font-size: 16px !important;
+        min-height: 50px;
+        margin: 0 !important;
+    }
+    
+    /* Container dos botões principais */
+    .action-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 100%;
+        margin-bottom: 15px;
+    }
+    
+    .action-buttons .btn {
+        width: 100%;
+        padding: 14px !important;
+    }
+    
+    /* Botões de filtro */
+    .filter-buttons {
+        display: flex;
+        gap: 8px;
+        width: 100%;
+    }
+    
+    .filter-buttons .btn {
+        flex: 1;
+        padding: 12px !important;
+    }
+    
+    /* Botões dentro da tabela */
+    .table-container .btn-sm {
+        padding: 10px 12px !important;
+        min-width: 44px;
+        min-height: 44px;
+        margin: 2px;
+    }
+    
+    /* Modal de gastos */
+    #modalGasto .modal-content {
+        width: 95%;
+        margin: 20px auto;
+        padding: 20px;
+        max-height: 85vh;
+        overflow-y: auto;
+    }
+    
+    #modalGasto .form-group {
+        margin-bottom: 15px;
+    }
+    
+    #modalGasto input,
+    #modalGasto select,
+    #modalGasto textarea {
+        padding: 14px !important;
+        font-size: 16px !important;
+        min-height: 50px;
+    }
+    
+    #modalGasto .btn {
+        padding: 14px !important;
+        font-size: 16px !important;
+        min-height: 50px;
+    }
+    
+    /* Botões de ação no modal */
+    #modalGasto .modal-footer {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-top: 20px;
+    }
+    
+    #modalGasto .modal-footer .btn {
+        width: 100%;
+    }
+    
+    /* Melhorar toque nos botões de excluir/editar */
+    .btn-sm {
+        padding: 12px !important;
+        min-width: 48px;
+        min-height: 48px;
+    }
+    
+    /* Espaçamento entre botões de ação */
+    .action-cell {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-start;
+    }
+    
+    /* Garantir que os botões não fiquem espremidos */
+    td:last-child {
+        min-width: 120px;
+    }
+}
+
+/* Telas muito pequenas */
+@media (max-width: 480px) {
+    .action-buttons {
+        gap: 6px;
+    }
+    
+    .filter-buttons {
+        flex-direction: column;
+        gap: 6px;
+    }
+    
+    .filter-buttons .btn {
+        width: 100%;
+    }
+    
+    td:last-child {
+        min-width: 140px;
+    }
+    
+    .btn-sm {
+        padding: 10px !important;
+        font-size: 14px !important;
+    }
+}

@@ -48,6 +48,8 @@ app.use('/api/doses', require('./routes/doseRoutes'));
 app.use('/api/combos', require('./routes/comboRoutes'));
 app.use('/api/caixa', require('./routes/caixaRoutes'));
 app.use('/api/exportar', require('./routes/exportacaoRoutes'));
+// Adicionar após as outras rotas
+app.use('/api/gastos', require('./routes/gastoRoutes'));
 
 // Rota para servir o frontend
 app.get('/', (req, res) => {

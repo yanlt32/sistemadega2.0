@@ -4,14 +4,16 @@ const vendaController = require('../controllers/vendaController');
 const authMiddleware = require('../middleware/authMiddleware');
 const { isAdmin, isFuncionario } = require('../middleware/permissaoMiddleware');
 
+// Todas as rotas requerem autenticação
 router.use(authMiddleware);
 
-// Funcionário pode criar vendas e ver histórico
+// Rotas que funcionário pode acessar
 router.post('/', isFuncionario, vendaController.criar);
 router.get('/', isFuncionario, vendaController.listar);
 router.get('/:id', isFuncionario, vendaController.buscarPorId);
 
-// Apenas admin pode excluir vendas
+// Rotas que apenas admin pode acessar
+router.put('/:id', isAdmin, vendaController.atualizar);
 router.delete('/:id', isAdmin, vendaController.excluir);
 router.put('/:id/cancelar', isAdmin, vendaController.cancelar);
 
