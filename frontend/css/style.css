@@ -1130,3 +1130,528 @@ tr:hover td {
         border: 1px solid #000;
     }
 }
+
+/* ===== VERSÃO MOBILE - OTIMIZADA PARA TELAS PEQUENAS ===== */
+@media screen and (max-width: 768px) {
+    /* ===== LAYOUT PRINCIPAL ===== */
+    .dashboard-container {
+        flex-direction: column;
+    }
+
+    /* ===== SIDEBAR TRANSFORMADA EM BOTTOM NAVBAR ===== */
+    .sidebar {
+        width: 100%;
+        height: auto;
+        position: fixed;
+        bottom: 0;
+        top: auto;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        background: var(--bg-secondary);
+        border-right: none;
+        border-top: 1px solid var(--border-color);
+        padding: 5px 0;
+        box-shadow: 0 -5px 20px var(--shadow-color);
+    }
+
+    .sidebar-header {
+        display: none; /* Esconde o título na versão mobile */
+    }
+
+    .sidebar-menu {
+        display: flex;
+        justify-content: space-around;
+        padding: 0;
+        margin: 0;
+    }
+
+    .sidebar-menu li {
+        padding: 8px 0;
+        margin: 0;
+        flex-direction: column;
+        gap: 2px;
+        font-size: 10px;
+        text-align: center;
+        background: transparent;
+        transform: none !important;
+    }
+
+    .sidebar-menu li i {
+        font-size: 20px;
+        width: auto;
+        margin: 0;
+    }
+
+    .sidebar-menu li span {
+        display: block !important;
+        font-size: 9px;
+    }
+
+    .sidebar-menu li.active {
+        background: transparent;
+        color: var(--accent-primary);
+        box-shadow: none;
+    }
+
+    .sidebar-menu li.active i {
+        color: var(--accent-primary);
+    }
+
+    /* ===== CONTEÚDO PRINCIPAL ===== */
+    .main-content {
+        margin-left: 0;
+        margin-bottom: 70px; /* Espaço para a bottom navbar */
+        padding: 15px;
+        width: 100%;
+    }
+
+    /* ===== TOP BAR ===== */
+    .top-bar {
+        flex-direction: column;
+        gap: 10px;
+        padding: 12px;
+        margin-bottom: 15px;
+    }
+
+    .top-bar h1 {
+        font-size: 18px;
+    }
+
+    .user-info {
+        width: 100%;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .user-info span {
+        font-size: 13px;
+    }
+
+    .logout-btn {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+
+    /* ===== CARDS ===== */
+    .cards-container {
+        grid-template-columns: 1fr;
+        gap: 12px;
+        margin-bottom: 15px;
+    }
+
+    .card {
+        padding: 15px;
+    }
+
+    .card h3 {
+        font-size: 12px;
+        margin-bottom: 8px;
+    }
+
+    .card .value {
+        font-size: 24px;
+    }
+
+    /* ===== TABELAS ===== */
+    .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    table {
+        min-width: 600px; /* Permite rolagem horizontal em tabelas grandes */
+    }
+
+    th {
+        padding: 12px 10px;
+        font-size: 12px;
+    }
+
+    td {
+        padding: 10px;
+        font-size: 13px;
+    }
+
+    /* ===== BOTÕES ===== */
+    .btn {
+        padding: 10px 16px;
+        font-size: 13px;
+    }
+
+    .btn-sm {
+        padding: 6px 10px;
+        font-size: 11px;
+    }
+
+    /* ===== FORMULÁRIOS ===== */
+    .form-group {
+        margin-bottom: 15px;
+    }
+
+    .form-group label {
+        font-size: 12px;
+        margin-bottom: 4px;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        padding: 10px 12px;
+        font-size: 14px;
+    }
+
+    /* ===== BARRA DE PESQUISA ===== */
+    .search-bar {
+        flex-direction: column;
+        gap: 8px;
+        padding: 8px;
+    }
+
+    .search-bar input,
+    .search-bar select {
+        width: 100%;
+        padding: 10px;
+        font-size: 14px;
+    }
+
+    /* ===== MODAL ===== */
+    .modal-content {
+        width: 95%;
+        margin: 30px auto;
+        padding: 20px;
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+
+    .close {
+        right: 15px;
+        top: 15px;
+        font-size: 24px;
+        width: 35px;
+        height: 35px;
+    }
+
+    /* ===== PAGINAÇÃO ===== */
+    .pagination {
+        gap: 5px;
+        margin-top: 20px;
+        flex-wrap: wrap;
+    }
+
+    .pagination button {
+        padding: 8px 10px;
+        min-width: 35px;
+        font-size: 12px;
+    }
+
+    /* ===== CARRINHO ===== */
+    .cart-container {
+        max-height: 300px;
+        padding: 12px;
+    }
+
+    .cart-item {
+        padding: 12px;
+    }
+
+    .cart-item-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+    }
+
+    .cart-item-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        width: 100%;
+    }
+
+    .quantity-control {
+        justify-content: space-between;
+        width: 100%;
+    }
+
+    .btn-quantity {
+        width: 40px;
+        height: 40px;
+        font-size: 20px;
+    }
+
+    .quantity-input {
+        width: 60px;
+        height: 40px;
+    }
+
+    .cart-total {
+        flex-direction: column;
+        gap: 5px;
+        text-align: center;
+    }
+
+    .cart-total span:last-child {
+        font-size: 20px;
+    }
+
+    /* ===== PRODUTOS CARD ===== */
+    .produtos-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+
+    .produto-card {
+        padding: 12px;
+    }
+
+    .produto-card h4 {
+        font-size: 14px;
+        margin-bottom: 5px;
+    }
+
+    .produto-card .categoria {
+        font-size: 10px;
+        margin-bottom: 8px;
+    }
+
+    .produto-card .preco {
+        font-size: 16px;
+        margin: 8px 0;
+    }
+
+    .produto-card .estoque {
+        font-size: 10px;
+        padding: 3px 6px;
+    }
+
+    /* ===== GRÁFICOS ===== */
+    .chart-container {
+        height: 250px;
+        padding: 10px;
+    }
+
+    /* ===== ALERTAS ===== */
+    .alert {
+        padding: 10px 15px;
+        font-size: 13px;
+    }
+
+    /* ===== TOOLTIPS ===== */
+    [data-tooltip]:before {
+        display: none; /* Remove tooltips no mobile */
+    }
+
+    /* ===== NOTIFICAÇÕES ===== */
+    .toast-notification {
+        min-width: 250px;
+        max-width: 300px;
+        top: 10px;
+        right: 10px;
+        padding: 12px;
+    }
+
+    .toast-icon {
+        font-size: 20px;
+    }
+
+    .toast-message {
+        font-size: 12px;
+    }
+
+    /* ===== BADGES ===== */
+    .badge {
+        padding: 3px 6px;
+        font-size: 10px;
+    }
+}
+
+/* ===== VERSÃO PARA TELAS MUITO PEQUENAS (ATÉ 480px) ===== */
+@media screen and (max-width: 480px) {
+    /* ===== LAYOUT ===== */
+    .main-content {
+        padding: 10px;
+        margin-bottom: 80px;
+    }
+
+    .sidebar-menu li i {
+        font-size: 18px;
+    }
+
+    .sidebar-menu li span {
+        font-size: 8px;
+    }
+
+    /* ===== TOP BAR ===== */
+    .top-bar {
+        padding: 8px;
+    }
+
+    .top-bar h1 {
+        font-size: 16px;
+    }
+
+    .user-info span {
+        font-size: 11px;
+    }
+
+    .logout-btn {
+        padding: 4px 8px;
+        font-size: 11px;
+    }
+
+    /* ===== CARDS ===== */
+    .card {
+        padding: 12px;
+    }
+
+    .card .value {
+        font-size: 20px;
+    }
+
+    /* ===== FORMULÁRIOS ===== */
+    .form-group input,
+    .form-group select {
+        padding: 8px 10px;
+        font-size: 13px;
+    }
+
+    /* ===== MODAL ===== */
+    .modal-content {
+        padding: 15px;
+        margin: 20px auto;
+    }
+
+    .modal-content h2 {
+        font-size: 18px;
+        margin-bottom: 15px;
+    }
+
+    /* ===== PRODUTOS GRID ===== */
+    .produtos-grid {
+        grid-template-columns: 1fr; /* Um produto por linha */
+    }
+
+    /* ===== CARRINHO ===== */
+    .cart-total {
+        font-size: 16px;
+    }
+
+    .cart-total span:last-child {
+        font-size: 18px;
+    }
+
+    /* ===== GRÁFICOS ===== */
+    .chart-container {
+        height: 200px;
+    }
+
+    /* ===== TABELAS ===== */
+    th, td {
+        padding: 8px 6px;
+        font-size: 11px;
+    }
+}
+
+/* ===== ORIENTAÇÃO PAISAGEM NO CELULAR ===== */
+@media screen and (max-width: 900px) and (orientation: landscape) {
+    .sidebar {
+        width: 200px;
+        height: 100vh;
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: auto;
+    }
+
+    .sidebar-header {
+        display: block;
+        padding: 15px 10px;
+    }
+
+    .sidebar-header h3 {
+        font-size: 18px;
+    }
+
+    .sidebar-menu {
+        flex-direction: column;
+    }
+
+    .sidebar-menu li {
+        flex-direction: row;
+        padding: 10px 15px;
+        font-size: 12px;
+    }
+
+    .sidebar-menu li i {
+        font-size: 16px;
+    }
+
+    .sidebar-menu li span {
+        display: inline !important;
+        font-size: 12px;
+    }
+
+    .main-content {
+        margin-left: 200px;
+        margin-bottom: 0;
+        padding: 15px;
+    }
+
+    .produtos-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* ===== MELHORIAS DE TOQUE ===== */
+@media (hover: none) and (pointer: coarse) {
+    /* Aumenta área de toque para botões */
+    .btn,
+    .sidebar-menu li,
+    .pagination button,
+    .btn-quantity,
+    .close {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    /* Remove efeitos hover que não funcionam no touch */
+    .btn:hover,
+    .card:hover,
+    .produto-card:hover,
+    .sidebar-menu li:hover {
+        transform: none;
+    }
+
+    /* Adiciona feedback visual ao toque */
+    .btn:active,
+    .sidebar-menu li:active,
+    .produto-card:active {
+        opacity: 0.7;
+        transform: scale(0.98);
+    }
+}
+
+/* ===== FIX PARA INPUTS NO IOS ===== */
+input, 
+select, 
+textarea {
+    -webkit-appearance: none;
+    border-radius: var(--border-radius-sm);
+    font-size: 16px !important; /* Previne zoom automático no iOS */
+}
+
+/* ===== MELHORIAS DE ROLAGEM ===== */
+.table-container {
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ===== BOTTOM SAFE AREA PARA IPHONES ===== */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    .sidebar {
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+    
+    .main-content {
+        margin-bottom: calc(70px + env(safe-area-inset-bottom));
+    }
+}

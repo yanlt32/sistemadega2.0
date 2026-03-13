@@ -2,8 +2,15 @@
 // SISTEMA DE NOTIFICAÇÕES E ATUALIZAÇÃO EM TEMPO REAL
 // ============================================
 
+// Sistema de notificações bonitas
 const Notificacao = {
     mostrar(mensagem, tipo = 'info', duracao = 3000) {
+        // Remover notificações antigas se houver muitas
+        const notificacoesExistentes = document.querySelectorAll('.toast-notification');
+        if (notificacoesExistentes.length > 3) {
+            notificacoesExistentes[0].remove();
+        }
+        
         // Criar elemento de notificação
         const toast = document.createElement('div');
         toast.className = `toast-notification toast-${tipo}`;
@@ -32,35 +39,38 @@ const Notificacao = {
     }
 };
 
+// Sistema de atualização em tempo real
 const Realtime = {
     socket: null,
     connected: false,
     
     init() {
-        this.connect();
-        this.setupListeners();
+        this.conectar();
+        this.configurarListeners();
         this.adicionarEstilos();
     },
     
-    connect() {
+    conectar() {
         try {
             // Detectar URL do servidor
             const serverUrl = window.location.hostname.includes('onrender.com') 
                 ? `https://${window.location.hostname}`
                 : `http://${window.location.hostname}:3000`;
             
-            this.socket = io(serverUrl);
+            this.socket = io(serverUrl, {
+                reconnection: true,
+                reconnectionAttempts: 5,
+                reconnectionDelay: 1000
+            });
             
             this.socket.on('connect', () => {
                 console.log('🟢 Conectado ao servidor');
                 this.connected = true;
-                Notificacao.mostrar('🟢 Conectado ao servidor', 'success', 2000);
             });
             
             this.socket.on('disconnect', () => {
                 console.log('🔴 Desconectado do servidor');
                 this.connected = false;
-                Notificacao.mostrar('🔴 Desconectado. Reconectando...', 'warning', 3000);
             });
             
             // ===== EVENTOS DE PRODUTO =====
@@ -87,18 +97,13 @@ const Realtime = {
             
             // ===== EVENTOS DE VENDA =====
             this.socket.on('venda:realizada', (data) => {
-                Notificacao.mostrar(data.mensagem || '💰 Venda realizada!', 'success');
+                Notificacao.mostrar(data.mensagem || '💰 Venda realizada com sucesso!', 'success');
                 this.atualizarPaginas(['vendas', 'historico', 'dashboard', 'relatorios']);
             });
             
             this.socket.on('venda:excluida', (data) => {
                 Notificacao.mostrar(data.mensagem || '🗑️ Venda excluída!', 'warning');
                 this.atualizarPaginas(['historico', 'dashboard', 'relatorios']);
-            });
-            
-            this.socket.on('venda:cancelada', (data) => {
-                Notificacao.mostrar(data.mensagem || '❌ Venda cancelada!', 'warning');
-                this.atualizarPaginas(['historico', 'dashboard']);
             });
             
             // ===== EVENTOS DE CATEGORIA =====
@@ -128,7 +133,7 @@ const Realtime = {
         }
     },
     
-    setupListeners() {
+    configurarListeners() {
         // Atualização manual (pode ser chamada por botões)
         document.addEventListener('realtime:update', (e) => {
             if (e.detail.paginas) {
@@ -162,7 +167,9 @@ const Realtime = {
                     
                 case 'historico':
                     if (path.includes('historico-vendas.html') && window.HistoricoVendas) {
-                        HistoricoVendas.carregar();
+                        if (typeof HistoricoVendas.carregar === 'function') {
+                            HistoricoVendas.carregar();
+                        }
                     }
                     break;
                     
@@ -183,7 +190,11 @@ const Realtime = {
     },
     
     adicionarEstilos() {
+        // Verificar se os estilos já existem
+        if (document.getElementById('realtime-styles')) return;
+        
         const style = document.createElement('style');
+        style.id = 'realtime-styles';
         style.textContent = `
             .toast-notification {
                 position: fixed;
@@ -203,6 +214,7 @@ const Realtime = {
                 animation: slideIn 0.3s ease;
                 overflow: hidden;
                 color: var(--text-primary, #fff);
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             }
             
             .toast-success { border-left-color: #00c853; }
@@ -217,6 +229,7 @@ const Realtime = {
             .toast-message {
                 flex: 1;
                 font-size: 14px;
+                line-height: 1.5;
             }
             
             .toast-progress {
@@ -255,15 +268,73 @@ const Realtime = {
                 from { width: 100%; }
                 to { width: 0%; }
             }
+            
+            /* Melhorias nos modais */
+            .modal {
+                animation: fadeIn 0.2s ease;
+            }
+            
+            .modal-content {
+                animation: slideDown 0.2s ease;
+            }
+            
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            
+            @keyframes slideDown {
+                from {
+                    transform: translateY(-20px);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateY(0);
+                    opacity: 1;
+                }
+            }
+            
+            /* Loading spinner melhorado */
+            .spinner-container {
+                backdrop-filter: blur(3px);
+            }
+            
+            .spinner {
+                width: 50px;
+                height: 50px;
+                border: 4px solid var(--bg-input, #2d323c);
+                border-top-color: var(--green, #00c853);
+                border-radius: 50%;
+                animation: spin 0.8s linear infinite;
+            }
+            
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
         `;
         document.head.appendChild(style);
     }
 };
 
+// Sobrescrever o método showNotification do App para usar o novo sistema
+if (window.App) {
+    const originalShowNotification = App.showNotification;
+    App.showNotification = function(message, type = 'info', duration = 3000) {
+        Notificacao.mostrar(message, type, duration);
+    };
+}
+
 // Inicializar quando a página carregar (exceto login)
 document.addEventListener('DOMContentLoaded', () => {
     if (!window.location.pathname.includes('index.html') && 
         window.location.pathname !== '/') {
-        Realtime.init();
+        // Aguardar um pouco para garantir que o socket.io carregou
+        setTimeout(() => {
+            Realtime.init();
+        }, 500);
     }
 });
+
+// Exportar para uso global
+window.Notificacao = Notificacao;
+window.Realtime = Realtime;
