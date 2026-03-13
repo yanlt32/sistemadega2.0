@@ -1,149 +1,192 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Categorias - Adega System</title>
-    <link rel="stylesheet" href="/css/style.css">
-</head>
-<body>
+    <link rel="stylesheet" href="/css/style.css" />
+  </head>
+  <body>
     <div class="dashboard-container">
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <h3>🍷 Adega</h3>
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <h3>🍷 Adega</h3>
+        </div>
+        <ul class="sidebar-menu">
+          <li onclick="window.location.href = '/dashboard.html'">
+            <i>📊</i> <span>Dashboard</span>
+          </li>
+          <li onclick="window.location.href = '/produtos.html'">
+            <i>📦</i> <span>Produtos</span>
+          </li>
+          <li onclick="window.location.href = '/vendas.html'">
+            <i>💰</i> <span>Vendas</span>
+          </li>
+          <li
+            onclick="window.location.href = '/categorias.html'"
+            class="active"
+          >
+            <i>🏷️</i> <span>Categorias</span>
+          </li>
+          <li onclick="window.location.href = '/relatorios.html'">
+            <i>📈</i> <span>Relatórios</span>
+          </li>
+          <li onclick="window.location.href = '/historico-vendas.html'">
+            <i>📋</i> <span>Histórico</span>
+          </li>
+        </ul>
+      </aside>
+
+      <main class="main-content">
+        <div class="top-bar">
+          <h1>Categorias e Tipos</h1>
+          <div class="user-info">
+            <span id="userNome"></span>
+            <button class="logout-btn" id="logoutBtn">Sair</button>
+          </div>
+        </div>
+
+        <div class="cards-container">
+          <!-- Categorias -->
+          <div class="card" style="flex: 1">
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 20px;
+              "
+            >
+              <h3>Categorias</h3>
+              <button class="btn btn-primary" onclick="Categorias.abrirModal()">
+                + Nova
+              </button>
             </div>
-            <ul class="sidebar-menu">
-                <li onclick="window.location.href='/dashboard.html'"><i>📊</i> <span>Dashboard</span></li>
-                <li onclick="window.location.href='/produtos.html'"><i>📦</i> <span>Produtos</span></li>
-                <li onclick="window.location.href='/vendas.html'"><i>💰</i> <span>Vendas</span></li>
-                <li onclick="window.location.href='/categorias.html'" class="active"><i>🏷️</i> <span>Categorias</span></li>
-                <li onclick="window.location.href='/relatorios.html'"><i>📈</i> <span>Relatórios</span></li>
-                 <li onclick="window.location.href='/historico-vendas.html'"><i>📋</i> <span>Histórico</span></li>
-                
-            </ul>
-        </aside>
-        
-        <main class="main-content">
-            <div class="top-bar">
-                <h1>Categorias e Tipos</h1>
-                <div class="user-info">
-                    <span id="userNome"></span>
-                    <button class="logout-btn" id="logoutBtn">Sair</button>
-                </div>
+
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>Tipo</th>
+                    <th>Produtos</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="tabelaCategorias"></tbody>
+              </table>
             </div>
-            
-            <div class="cards-container">
-                <!-- Categorias -->
-                <div class="card" style="flex: 1;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
-                        <h3>Categorias</h3>
-                        <button class="btn btn-primary" onclick="Categorias.abrirModal()">+ Nova</button>
-                    </div>
-                    
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Nome</th>
-                                    <th>Tipo</th>
-                                    <th>Produtos</th>
-                                    <th>Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tabelaCategorias"></tbody>
-                        </table>
-                    </div>
-                </div>
-                
-                <!-- Tipos -->
-                <div class="card" style="flex: 1;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
-                        <h3>Tipos</h3>
-                        <button class="btn btn-primary" onclick="Tipos.abrirModal()">+ Novo</button>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Filtrar por Categoria:</label>
-                        <select id="filtroTipoCategoria" onchange="Tipos.carregar()">
-                            <option value="todas">Todas</option>
-                        </select>
-                    </div>
-                    
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Nome</th>
-                                    <th>Categoria</th>
-                                    <th>Produtos</th>
-                                    <th>Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tabelaTipos"></tbody>
-                        </table>
-                    </div>
-                </div>
+          </div>
+
+          <!-- Tipos -->
+          <div class="card" style="flex: 1">
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 20px;
+              "
+            >
+              <h3>Tipos</h3>
+              <button class="btn btn-primary" onclick="Tipos.abrirModal()">
+                + Novo
+              </button>
             </div>
-        </main>
+
+            <div class="form-group">
+              <label>Filtrar por Categoria:</label>
+              <select id="filtroTipoCategoria" onchange="Tipos.carregar()">
+                <option value="todas">Todas</option>
+              </select>
+            </div>
+
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>Categoria</th>
+                    <th>Produtos</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="tabelaTipos"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
-    
+
     <!-- Modal Categoria -->
     <div id="modalCategoria" class="modal">
-        <div class="modal-content">
-            <span class="close" onclick="Categorias.fecharModal()">&times;</span>
-            <h2 id="modalCategoriaTitulo">Nova Categoria</h2>
-            <form id="formCategoria" onsubmit="return false;">
-                <input type="hidden" id="categoriaId">
-                
-                <div class="form-group">
-                    <label for="categoriaNome">Nome da Categoria</label>
-                    <input type="text" id="categoriaNome" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="categoriaTipo">Tipo</label>
-                    <select id="categoriaTipo" required>
-                        <option value="bebida">Bebida</option>
-                        <option value="come">Come</option>
-                        <option value="outro">Outro</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label for="categoriaCor">Cor</label>
-                    <input type="color" id="categoriaCor" value="#4CAF50">
-                </div>
-                
-                <button type="submit" class="btn btn-primary" onclick="Categorias.salvar()">Salvar</button>
-            </form>
-        </div>
+      <div class="modal-content">
+        <span class="close" onclick="Categorias.fecharModal()">&times;</span>
+        <h2 id="modalCategoriaTitulo">Nova Categoria</h2>
+        <form id="formCategoria" onsubmit="return false;">
+          <input type="hidden" id="categoriaId" />
+
+          <div class="form-group">
+            <label for="categoriaNome">Nome da Categoria</label>
+            <input type="text" id="categoriaNome" required />
+          </div>
+
+          <div class="form-group">
+            <label for="categoriaTipo">Tipo</label>
+            <select id="categoriaTipo" required>
+              <option value="bebida">Bebida</option>
+              <option value="come">Come</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="categoriaCor">Cor</label>
+            <input type="color" id="categoriaCor" value="#4CAF50" />
+          </div>
+
+          <button
+            type="submit"
+            class="btn btn-primary"
+            onclick="Categorias.salvar()"
+          >
+            Salvar
+          </button>
+        </form>
+      </div>
     </div>
-    
+
     <!-- Modal Tipo -->
     <div id="modalTipo" class="modal">
-        <div class="modal-content">
-            <span class="close" onclick="Tipos.fecharModal()">&times;</span>
-            <h2 id="modalTipoTitulo">Novo Tipo</h2>
-            <form id="formTipo" onsubmit="return false;">
-                <input type="hidden" id="tipoId">
-                
-                <div class="form-group">
-                    <label for="tipoNome">Nome do Tipo</label>
-                    <input type="text" id="tipoNome" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="tipoCategoria">Categoria</label>
-                    <select id="tipoCategoria" required></select>
-                </div>
-                
-                <button type="submit" class="btn btn-primary" onclick="Tipos.salvar()">Salvar</button>
-            </form>
-        </div>
+      <div class="modal-content">
+        <span class="close" onclick="Tipos.fecharModal()">&times;</span>
+        <h2 id="modalTipoTitulo">Novo Tipo</h2>
+        <form id="formTipo" onsubmit="return false;">
+          <input type="hidden" id="tipoId" />
+
+          <div class="form-group">
+            <label for="tipoNome">Nome do Tipo</label>
+            <input type="text" id="tipoNome" required />
+          </div>
+
+          <div class="form-group">
+            <label for="tipoCategoria">Categoria</label>
+            <select id="tipoCategoria" required></select>
+          </div>
+
+          <button
+            type="submit"
+            class="btn btn-primary"
+            onclick="Tipos.salvar()"
+          >
+            Salvar
+          </button>
+        </form>
+      </div>
     </div>
-    
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/realtime.js"></script>
     <script src="/js/api.js"></script>
     <script src="/js/auth.js"></script>
     <script src="/js/categorias.js"></script>
-</body>
+  </body>
 </html>
