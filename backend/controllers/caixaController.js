@@ -32,7 +32,11 @@ const caixaController = {
                         `UPDATE configuracoes SET valor = 'true' WHERE chave = 'caixa_aberto'`
                     );
 
-                    req.io.emit('caixa:aberto', { id: this.lastID });
+                    // Emitir evento
+                    req.io.emit('caixa:aberto', { 
+                        id: this.lastID,
+                        mensagem: `🔓 Caixa aberto com R$ ${valor_inicial || 0}`
+                    });
 
                     res.json({ 
                         id: this.lastID, 
@@ -65,7 +69,8 @@ const caixaController = {
             db.get(`
                 SELECT 
                     COALESCE(SUM(total), 0) as total_vendas,
-                    COALESCE(SUM(lucro), 0) as total_lucro
+                    COALESCE(SUM(lucro), 0) as total_lucro,
+                    COUNT(*) as quantidade_vendas
                 FROM vendas 
                 WHERE data_venda >= ? AND status = 'concluida'
             `, [dataAbertura], (err, totais) => {
@@ -104,7 +109,11 @@ const caixaController = {
                             [new Date().toISOString()]
                         );
 
-                        req.io.emit('caixa:fechado', { id: caixa.id });
+                        // Emitir evento
+                        req.io.emit('caixa:fechado', { 
+                            id: caixa.id,
+                            mensagem: `🔒 Caixa fechado! Total: R$ ${totalVendas.toFixed(2)}`
+                        });
 
                         res.json({ 
                             message: 'Caixa fechado com sucesso',
@@ -112,7 +121,8 @@ const caixaController = {
                                 valor_inicial: caixa.valor_inicial,
                                 total_vendas: totalVendas,
                                 total_lucro: totalLucro,
-                                valor_final: valorFinal
+                                valor_final: valorFinal,
+                                quantidade_vendas: totais.quantidade_vendas
                             }
                         });
                     }
@@ -164,7 +174,7 @@ const caixaController = {
         });
     },
 
-    // Histórico de caixas
+    // Histórico de caixas (apenas admin)
     historico: (req, res) => {
         const { page = 1, limit = 10 } = req.query;
         const offset = (page - 1) * limit;
@@ -198,7 +208,7 @@ const caixaController = {
         });
     },
 
-    // Relatório semanal
+    // Relatório semanal (apenas admin)
     relatorioSemanal: (req, res) => {
         db.all(`
             SELECT 
@@ -223,7 +233,7 @@ const caixaController = {
         });
     },
 
-    // Relatório mensal
+    // Relatório mensal (apenas admin)
     relatorioMensal: (req, res) => {
         db.all(`
             SELECT 

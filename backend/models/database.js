@@ -33,19 +33,19 @@ function initializeDatabase() {
             UNIQUE(nome, categoria_id)
         )`);
 
-        // Criar tabela de usuários
+        // Criar tabela de usuários (ATUALIZADA com role)
         db.run(`CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
             nome TEXT,
             email TEXT UNIQUE,
-            role TEXT DEFAULT 'user',
+            role TEXT DEFAULT 'funcionario',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             last_login DATETIME
         )`);
 
-        // Criar tabela de produtos (atualizada com unidade_medida)
+        // Criar tabela de produtos
         db.run(`CREATE TABLE IF NOT EXISTS produtos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
@@ -62,7 +62,7 @@ function initializeDatabase() {
             FOREIGN KEY (tipo_id) REFERENCES tipos(id)
         )`);
 
-        // NOVA TABELA: doses
+        // Criar tabela de doses
         db.run(`CREATE TABLE IF NOT EXISTS doses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             produto_id INTEGER,
@@ -76,7 +76,7 @@ function initializeDatabase() {
             FOREIGN KEY (produto_id) REFERENCES produtos(id) ON DELETE CASCADE
         )`);
 
-        // NOVA TABELA: combos
+        // Criar tabela de combos
         db.run(`CREATE TABLE IF NOT EXISTS combos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
@@ -87,7 +87,7 @@ function initializeDatabase() {
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
 
-        // NOVA TABELA: itens_combo
+        // Criar tabela de itens_combo
         db.run(`CREATE TABLE IF NOT EXISTS itens_combo (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             combo_id INTEGER,
@@ -99,7 +99,7 @@ function initializeDatabase() {
             FOREIGN KEY (dose_id) REFERENCES doses(id)
         )`);
 
-        // Criar tabela de vendas (atualizada)
+        // Criar tabela de vendas
         db.run(`CREATE TABLE IF NOT EXISTS vendas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             data_venda DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -113,7 +113,7 @@ function initializeDatabase() {
             FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
         )`);
 
-        // Criar tabela de itens_venda (atualizada)
+        // Criar tabela de itens_venda
         db.run(`CREATE TABLE IF NOT EXISTS itens_venda (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             venda_id INTEGER,
@@ -216,31 +216,53 @@ function initializeDatabase() {
     });
 }
 
-async function criarUsuarioPadrao() {
-    const senhaCriptografada = await bcrypt.hash('admin123', 10);
+async function criarUsuariosPadrao() {
+    const senhaAdmin = await bcrypt.hash('admin123', 10);
+    const senhaFuncionario = await bcrypt.hash('func123', 10);
     
+    // Criar admin se não existir
     db.get('SELECT * FROM usuarios WHERE username = ?', ['admin'], (err, row) => {
         if (err) {
-            console.error('Erro ao verificar usuário:', err);
+            console.error('Erro ao verificar admin:', err);
             return;
         }
         
         if (!row) {
             db.run(
                 'INSERT INTO usuarios (username, password, nome, email, role) VALUES (?, ?, ?, ?, ?)',
-                ['admin', senhaCriptografada, 'Administrador', 'admin@adega.com', 'admin'],
+                ['admin', senhaAdmin, 'Administrador', 'admin@adega.com', 'admin'],
                 function(err) {
                     if (err) {
-                        console.error('Erro ao criar usuário padrão:', err);
+                        console.error('Erro ao criar admin:', err);
                     } else {
-                        console.log('✅ Usuário padrão criado: admin / admin123');
+                        console.log('✅ Admin criado: admin / admin123');
                     }
                 }
             );
-        } else {
-            console.log('✅ Usuário padrão já existe');
+        }
+    });
+    
+    // Criar funcionário se não existir
+    db.get('SELECT * FROM usuarios WHERE username = ?', ['funcionario'], (err, row) => {
+        if (err) {
+            console.error('Erro ao verificar funcionário:', err);
+            return;
+        }
+        
+        if (!row) {
+            db.run(
+                'INSERT INTO usuarios (username, password, nome, email, role) VALUES (?, ?, ?, ?, ?)',
+                ['funcionario', senhaFuncionario, 'Funcionário', 'func@adega.com', 'funcionario'],
+                function(err) {
+                    if (err) {
+                        console.error('Erro ao criar funcionário:', err);
+                    } else {
+                        console.log('✅ Funcionário criado: funcionario / func123');
+                    }
+                }
+            );
         }
     });
 }
 
-module.exports = { db, initializeDatabase, criarUsuarioPadrao };
+module.exports = { db, initializeDatabase, criarUsuariosPadrao };

@@ -67,6 +67,14 @@ class App {
             CategoriasManager.init();
         } else if (path.includes('relatorios.html')) {
             Relatorios.init();
+        } else if (path.includes('caixa.html')) {
+            if (window.Caixa) {
+                Caixa.init();
+            }
+        } else if (path.includes('historico-vendas.html')) {
+            if (window.HistoricoVendas) {
+                HistoricoVendas.init();
+            }
         }
     }
 
@@ -100,7 +108,7 @@ class App {
 }
 
 // ============================================
-// MÓDULO DE AUTENTICAÇÃO
+// MÓDULO DE AUTENTICAÇÃO (ATUALIZADO COM PERFIL)
 // ============================================
 const Auth = {
     currentUser: null,
@@ -116,7 +124,7 @@ const Auth = {
                 localStorage.setItem('token', response.token);
                 localStorage.setItem('user', JSON.stringify(response.user));
                 
-                App.showNotification('Login realizado com sucesso!', 'success');
+                App.showNotification(`Bem-vindo, ${response.user.nome || response.user.username}!`, 'success');
                 
                 setTimeout(() => {
                     window.location.href = '/dashboard.html';
@@ -158,6 +166,19 @@ const Auth = {
         return null;
     },
     
+    getUserRole() {
+        const user = this.getCurrentUser();
+        return user?.role || 'funcionario';
+    },
+
+    isAdmin() {
+        return this.getUserRole() === 'admin';
+    },
+
+    isFuncionario() {
+        return this.getUserRole() === 'funcionario';
+    },
+    
     async checkAuth() {
         const token = localStorage.getItem('token');
         
@@ -175,6 +196,7 @@ const Auth = {
             if (response.valid) {
                 this.currentUser = response.user;
                 this.updateUserInfo();
+                this.updateMenuByRole();
                 return true;
             } else {
                 this.logout();
@@ -189,12 +211,51 @@ const Auth = {
     updateUserInfo() {
         const user = this.getCurrentUser();
         const elements = document.querySelectorAll('#userNome');
+        const roleElements = document.querySelectorAll('#userRole');
         
         elements.forEach(el => {
             if (el) {
                 el.textContent = user?.nome || user?.username || 'Usuário';
             }
         });
+        
+        roleElements.forEach(el => {
+            if (el) {
+                const role = user?.role || 'funcionario';
+                el.textContent = role === 'admin' ? '👑 Admin' : '👤 Funcionário';
+                el.className = `badge ${role === 'admin' ? 'badge-success' : 'badge-info'}`;
+            }
+        });
+    },
+
+    updateMenuByRole() {
+        const isAdmin = this.isAdmin();
+        const menuItems = document.querySelectorAll('.sidebar-menu li');
+        
+        menuItems.forEach(item => {
+            const text = item.textContent || '';
+            
+            // Itens que apenas admin pode ver
+            if (text.includes('Relatórios') || text.includes('Categorias')) {
+                item.style.display = isAdmin ? 'flex' : 'none';
+            }
+            
+            // Item de caixa todos veem
+            if (text.includes('Caixa')) {
+                item.style.display = 'flex';
+            }
+            
+            // Item de produtos - funcionário só vê, não edita
+            if (text.includes('Produtos') && !isAdmin) {
+                // Vai ser tratado no próprio módulo
+            }
+        });
+
+        // Esconder botões de ação para funcionário em produtos
+        if (!isAdmin && window.location.pathname.includes('produtos.html')) {
+            const btnNovo = document.getElementById('btnNovoProduto');
+            if (btnNovo) btnNovo.style.display = 'none';
+        }
     }
 };
 
@@ -260,7 +321,7 @@ const UI = {
 };
 
 // ============================================
-// MÓDULO DASHBOARD
+// MÓDULO DASHBOARD (ATUALIZADO COM PERFIL)
 // ============================================
 const Dashboard = {
     charts: {},
@@ -268,26 +329,50 @@ const Dashboard = {
     
     async init() {
         await Auth.checkAuth();
+        this.verificarPermissoes();
         await this.loadData();
         this.setupCharts();
         this.startAutoRefresh();
+    },
+
+    verificarPermissoes() {
+        const isAdmin = Auth.isAdmin();
+        
+        // Esconder cards financeiros para funcionário
+        if (!isAdmin) {
+            const cardsFinanceiros = document.querySelectorAll('.card.financeiro');
+            cardsFinanceiros.forEach(card => {
+                card.style.display = 'none';
+            });
+        }
     },
     
     async loadData() {
         try {
             UI.showLoading();
             
-            const [
-                lucroDiario,
-                lucroMensal,
-                estoqueBaixo,
-                vendasPeriodo
-            ] = await Promise.all([
-                API.lucroDiario(),
-                API.lucroMensal(),
-                API.estoqueBaixo(),
-                API.vendasPorPeriodo('dia')
-            ]);
+            const promises = [];
+            
+            // Sempre carregar estoque baixo
+            promises.push(API.estoqueBaixo().catch(() => []));
+            
+            // Se for admin, carrega dados financeiros
+            if (Auth.isAdmin()) {
+                promises.push(
+                    API.lucroDiario().catch(() => ({ total_vendas: 0, total_lucro: 0 })),
+                    API.lucroMensal().catch(() => ({ total_vendas: 0, total_lucro: 0 })),
+                    API.vendasPorPeriodo('dia').catch(() => [])
+                );
+            } else {
+                // Funcionário não vê dados financeiros
+                promises.push(
+                    Promise.resolve({ total_vendas: 0, total_lucro: 0 }),
+                    Promise.resolve({ total_vendas: 0, total_lucro: 0 }),
+                    Promise.resolve([])
+                );
+            }
+            
+            const [estoqueBaixo, lucroDiario, lucroMensal, vendasPeriodo] = await Promise.all(promises);
             
             this.data = {
                 lucroDiario,
@@ -315,16 +400,24 @@ const Dashboard = {
             estoqueBaixo: document.getElementById('estoqueBaixo')
         };
         
-        if (elements.vendasHoje) {
+        const isAdmin = Auth.isAdmin();
+        
+        if (elements.vendasHoje && isAdmin) {
             elements.vendasHoje.textContent = UI.formatCurrency(this.data.lucroDiario?.total_vendas || 0);
+        } else if (elements.vendasHoje) {
+            elements.vendasHoje.parentElement.style.display = 'none';
         }
         
-        if (elements.lucroHoje) {
+        if (elements.lucroHoje && isAdmin) {
             elements.lucroHoje.textContent = UI.formatCurrency(this.data.lucroDiario?.total_lucro || 0);
+        } else if (elements.lucroHoje) {
+            elements.lucroHoje.parentElement.style.display = 'none';
         }
         
-        if (elements.vendasMes) {
+        if (elements.vendasMes && isAdmin) {
             elements.vendasMes.textContent = UI.formatCurrency(this.data.lucroMensal?.total_vendas || 0);
+        } else if (elements.vendasMes) {
+            elements.vendasMes.parentElement.style.display = 'none';
         }
         
         if (elements.estoqueBaixo) {
@@ -333,6 +426,8 @@ const Dashboard = {
     },
     
     setupCharts() {
+        if (!Auth.isAdmin()) return; // Funcionário não vê gráficos
+        
         const ctxVendas = document.getElementById('graficoVendas')?.getContext('2d');
         if (!ctxVendas) return;
         
@@ -387,6 +482,8 @@ const Dashboard = {
     },
     
     updateCharts() {
+        if (!Auth.isAdmin()) return;
+        
         if (this.charts.vendas && this.data.vendasPeriodo && this.data.vendasPeriodo.length > 0) {
             this.charts.vendas.data.labels = this.data.vendasPeriodo.map(d => 
                 UI.formatDate(d.periodo)
@@ -419,9 +516,11 @@ const Dashboard = {
                         <br>
                         <small>Estoque atual: ${p.quantidade} unidades</small>
                     </div>
-                    <button class="btn btn-primary btn-sm" onclick="Produtos.abrirModalEstoque(${p.id})">
-                        Repor
-                    </button>
+                    ${Auth.isAdmin() ? `
+                        <button class="btn btn-primary btn-sm" onclick="Produtos.abrirModalEstoque(${p.id})">
+                            Repor
+                        </button>
+                    ` : ''}
                 </div>
             </div>
         `).join('');
@@ -437,7 +536,7 @@ const Dashboard = {
 };
 
 // ============================================
-// MÓDULO DE PRODUTOS
+// MÓDULO DE PRODUTOS (ATUALIZADO COM PERFIL)
 // ============================================
 const Produtos = {
     paginaAtual: 1,
@@ -452,21 +551,32 @@ const Produtos = {
     
     async init() {
         await Auth.checkAuth();
+        this.verificarPermissoes();
         this.setupEventListeners();
         await this.carregarCategorias();
         await this.carregar();
     },
-    
-    setupEventListeners() {
-        // Botão novo produto
+
+    verificarPermissoes() {
+        this.isAdmin = Auth.isAdmin();
+        
+        // Esconder botão de novo produto para funcionário
         const btnNovo = document.getElementById('btnNovoProduto');
         if (btnNovo) {
+            btnNovo.style.display = this.isAdmin ? 'flex' : 'none';
+        }
+    },
+    
+    setupEventListeners() {
+        // Botão novo produto (só admin)
+        const btnNovo = document.getElementById('btnNovoProduto');
+        if (btnNovo && this.isAdmin) {
             btnNovo.addEventListener('click', () => {
                 this.abrirModal();
             });
         }
         
-        // Busca
+        // Busca (todos podem)
         const buscaInput = document.getElementById('buscaProduto');
         if (buscaInput) {
             buscaInput.addEventListener('input', 
@@ -478,7 +588,7 @@ const Produtos = {
             );
         }
         
-        // Filtro categoria
+        // Filtro categoria (todos podem)
         const filtroCategoria = document.getElementById('filtroCategoria');
         if (filtroCategoria) {
             filtroCategoria.addEventListener('change', (e) => {
@@ -488,9 +598,9 @@ const Produtos = {
             });
         }
         
-        // Formulário
+        // Formulário (só admin)
         const formProduto = document.getElementById('formProduto');
-        if (formProduto) {
+        if (formProduto && this.isAdmin) {
             formProduto.addEventListener('submit', (e) => {
                 e.preventDefault();
                 this.salvar();
@@ -504,6 +614,14 @@ const Produtos = {
                 this.fecharModal();
             });
         }
+
+        // Fechar modal clicando fora
+        window.addEventListener('click', (e) => {
+            const modal = document.getElementById('modalProduto');
+            if (e.target === modal) {
+                this.fecharModal();
+            }
+        });
     },
     
     async carregarCategorias() {
@@ -517,9 +635,9 @@ const Produtos = {
                     categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
             }
             
-            // Preencher select do modal
+            // Preencher select do modal (só se for admin)
             const modalSelect = document.getElementById('produtoCategoria');
-            if (modalSelect) {
+            if (modalSelect && this.isAdmin) {
                 modalSelect.innerHTML = '<option value="">Selecione uma categoria</option>' +
                     categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
                 
@@ -531,6 +649,8 @@ const Produtos = {
     },
     
     async carregarTipos(categoriaId = null) {
+        if (!this.isAdmin) return;
+        
         try {
             const select = document.getElementById('produtoTipo');
             if (!select) return;
@@ -593,7 +713,7 @@ const Produtos = {
                         <div style="font-size: 48px; margin-bottom: 20px;">📦</div>
                         <h3>Nenhum produto encontrado</h3>
                         <p style="color: var(--text-muted); margin-top: 10px;">
-                            Clique em "Novo Produto" para começar
+                            ${this.isAdmin ? 'Clique em "Novo Produto" para começar' : 'Nenhum produto cadastrado'}
                         </p>
                     </td>
                 </tr>
@@ -606,7 +726,7 @@ const Produtos = {
                 <td><strong>${p.nome || '-'}</strong></td>
                 <td>${p.categoria_nome || '-'}</td>
                 <td>${p.tipo_nome || '-'}</td>
-                <td>${UI.formatCurrency(p.preco_custo)}</td>
+                <td>${this.isAdmin ? UI.formatCurrency(p.preco_custo) : '---'}</td>
                 <td>${UI.formatCurrency(p.preco_venda)}</td>
                 <td>
                     <span class="badge ${(p.quantidade || 0) < 5 ? 'badge-warning' : 'badge-success'}">
@@ -614,17 +734,15 @@ const Produtos = {
                     </span>
                 </td>
                 <td>
-                    <div style="display: flex; gap: 5px;">
-                        <button class="btn btn-primary btn-sm" onclick="Produtos.editar(${p.id})" title="Editar">
-                            ✏️
-                        </button>
-                        <button class="btn btn-warning btn-sm" onclick="Produtos.abrirModalEstoque(${p.id})" title="Ajustar Estoque">
-                            📦
-                        </button>
-                        <button class="btn btn-danger btn-sm" onclick="Produtos.excluir(${p.id})" title="Excluir">
-                            🗑️
-                        </button>
-                    </div>
+                    ${this.isAdmin ? `
+                        <div style="display: flex; gap: 5px;">
+                            <button class="btn btn-primary btn-sm" onclick="Produtos.editar(${p.id})" title="Editar">✏️</button>
+                            <button class="btn btn-warning btn-sm" onclick="Produtos.abrirModalEstoque(${p.id})" title="Ajustar Estoque">📦</button>
+                            <button class="btn btn-danger btn-sm" onclick="Produtos.excluir(${p.id})" title="Excluir">🗑️</button>
+                        </div>
+                    ` : `
+                        <span class="badge badge-info">Apenas visualização</span>
+                    `}
                 </td>
             </tr>
         `).join('');
@@ -676,6 +794,11 @@ const Produtos = {
     },
     
     abrirModal(produto = null) {
+        if (!this.isAdmin) {
+            App.showNotification('Apenas administradores podem editar produtos', 'warning');
+            return;
+        }
+        
         this.produtoEditando = produto;
         
         const modal = document.getElementById('modalProduto');
@@ -718,6 +841,8 @@ const Produtos = {
     },
     
     async salvar() {
+        if (!this.isAdmin) return;
+        
         try {
             UI.showLoading();
             
@@ -736,9 +861,6 @@ const Produtos = {
             if (!produto.tipo_id) throw new Error('Tipo é obrigatório');
             if (produto.preco_custo < 0) throw new Error('Preço de custo inválido');
             if (produto.preco_venda < 0) throw new Error('Preço de venda inválido');
-            if (produto.preco_venda <= produto.preco_custo) {
-                App.showNotification('Atenção: Preço de venda menor ou igual ao custo!', 'warning');
-            }
             
             if (this.produtoEditando) {
                 await API.atualizarProduto(this.produtoEditando.id, produto);
@@ -759,6 +881,7 @@ const Produtos = {
     },
     
     async editar(id) {
+        if (!this.isAdmin) return;
         const produto = this.produtos.find(p => p.id === id);
         if (produto) {
             this.abrirModal(produto);
@@ -766,6 +889,11 @@ const Produtos = {
     },
     
     abrirModalEstoque(id) {
+        if (!this.isAdmin) {
+            App.showNotification('Apenas administradores podem ajustar estoque', 'warning');
+            return;
+        }
+        
         const produto = this.produtos.find(p => p.id === id);
         if (!produto) return;
         
@@ -777,6 +905,8 @@ const Produtos = {
     },
     
     async atualizarEstoque(id, quantidade) {
+        if (!this.isAdmin) return;
+        
         try {
             UI.showLoading();
             
@@ -800,6 +930,11 @@ const Produtos = {
     },
     
     async excluir(id) {
+        if (!this.isAdmin) {
+            App.showNotification('Apenas administradores podem excluir produtos', 'warning');
+            return;
+        }
+        
         if (!confirm('Tem certeza que deseja excluir este produto?')) return;
         
         try {
@@ -1098,7 +1233,14 @@ const Vendas = {
         }
         
         if (totalElement) totalElement.textContent = UI.formatCurrency(total);
-        if (lucroElement) lucroElement.textContent = UI.formatCurrency(lucro);
+        if (lucroElement) {
+            if (Auth.isAdmin()) {
+                lucroElement.textContent = UI.formatCurrency(lucro);
+                lucroElement.parentElement.style.display = 'flex';
+            } else {
+                lucroElement.parentElement.style.display = 'none';
+            }
+        }
     },
     
     async finalizarVenda() {
@@ -1157,7 +1299,7 @@ const Vendas = {
 };
 
 // ============================================
-// MÓDULO DE CATEGORIAS
+// MÓDULO DE CATEGORIAS (APENAS ADMIN)
 // ============================================
 const CategoriasManager = {
     categoriaEditando: null,
@@ -1165,6 +1307,13 @@ const CategoriasManager = {
     
     async init() {
         await Auth.checkAuth();
+        
+        // Verificar se é admin
+        if (!Auth.isAdmin()) {
+            window.location.href = '/dashboard.html';
+            return;
+        }
+        
         await this.carregarCategorias();
         await this.carregarTipos();
         this.setupEventListeners();
@@ -1486,14 +1635,20 @@ const CategoriasManager = {
 };
 
 // ============================================
-// MÓDULO DE RELATÓRIOS (CORRIGIDO)
+// MÓDULO DE RELATÓRIOS (APENAS ADMIN)
 // ============================================
 const Relatorios = {
     charts: {},
     
     async init() {
-        console.log('Inicializando relatórios...'); // Debug
         await Auth.checkAuth();
+        
+        // Verificar se é admin
+        if (!Auth.isAdmin()) {
+            window.location.href = '/dashboard.html';
+            return;
+        }
+        
         this.setupEventListeners();
         await this.carregar();
     },
@@ -1502,7 +1657,6 @@ const Relatorios = {
         const periodoSelect = document.getElementById('periodoRelatorio');
         if (periodoSelect) {
             periodoSelect.addEventListener('change', (e) => {
-                console.log('Período alterado:', e.target.value); // Debug
                 this.carregar(e.target.value);
             });
         }
@@ -1510,7 +1664,6 @@ const Relatorios = {
     
     async carregar(periodo = 'mes') {
         try {
-            console.log('Carregando relatórios - período:', periodo); // Debug
             UI.showLoading();
             
             // Mostrar loading nos cards
@@ -1541,8 +1694,6 @@ const Relatorios = {
                     })
                 ]);
             
-            console.log('Dados recebidos:', { lucroDiario, lucroMensal, produtoMaisVendido, categoriaMaisVendida, vendasPeriodo }); // Debug
-            
             this.atualizarCards(lucroDiario, lucroMensal);
             this.atualizarDestaques(produtoMaisVendido, categoriaMaisVendida);
             this.atualizarTabela(vendasPeriodo || []);
@@ -1561,15 +1712,11 @@ const Relatorios = {
         const mesEl = document.getElementById('lucroMensalValor');
         
         if (hojeEl) {
-            const valor = lucroDiario?.total_lucro || 0;
-            hojeEl.textContent = UI.formatCurrency(valor);
-            console.log('Lucro hoje:', valor); // Debug
+            hojeEl.textContent = UI.formatCurrency(lucroDiario?.total_lucro || 0);
         }
         
         if (mesEl) {
-            const valor = lucroMensal?.total_lucro || 0;
-            mesEl.textContent = UI.formatCurrency(valor);
-            console.log('Lucro mês:', valor); // Debug
+            mesEl.textContent = UI.formatCurrency(lucroMensal?.total_lucro || 0);
         }
     },
     
@@ -1606,8 +1753,6 @@ const Relatorios = {
         const tbody = document.getElementById('tabelaVendasPeriodo');
         if (!tbody) return;
         
-        console.log('Atualizando tabela com:', vendas); // Debug
-        
         if (!vendas || vendas.length === 0) {
             tbody.innerHTML = `
                 <tr>
@@ -1631,19 +1776,13 @@ const Relatorios = {
     
     atualizarGrafico(vendas, periodo) {
         const ctx = document.getElementById('graficoRelatorio')?.getContext('2d');
-        if (!ctx) {
-            console.warn('Canvas do gráfico não encontrado');
-            return;
-        }
-        
-        console.log('Atualizando gráfico com:', vendas); // Debug
+        if (!ctx) return;
         
         if (this.charts.relatorio) {
             this.charts.relatorio.destroy();
         }
         
         if (!vendas || vendas.length === 0) {
-            // Mostrar mensagem no canvas
             ctx.font = '14px Arial';
             ctx.fillStyle = '#8f9bae';
             ctx.textAlign = 'center';
@@ -1710,6 +1849,7 @@ const Relatorios = {
         });
     }
 };
+
 // ============================================
 // UTILITÁRIOS
 // ============================================

@@ -3,7 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const http = require('http');
 const socketIo = require('socket.io');
-const { initializeDatabase, criarUsuarioPadrao } = require('./models/database');
+const { initializeDatabase, criarUsuariosPadrao } = require('./models/database'); // ← Note o plural
 
 const app = express();
 const server = http.createServer(app);
@@ -29,7 +29,7 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 // Inicializar banco de dados
 console.log('🔄 Inicializando banco de dados...');
 initializeDatabase();
-criarUsuarioPadrao();
+criarUsuariosPadrao(); // ← Corrigido aqui
 
 // Middleware para emitir eventos WebSocket
 app.use((req, res, next) => {
@@ -76,6 +76,10 @@ app.get('/categorias.html', (req, res) => {
 
 app.get('/relatorios.html', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/relatorios.html'));
+});
+
+app.get('/caixa.html', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/caixa.html'));
 });
 
 // Rota de saúde

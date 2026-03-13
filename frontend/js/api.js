@@ -214,5 +214,155 @@ const API = {
     
     async vendasPorPeriodo(periodo) {
         return this.request(`/relatorios/vendas-por-periodo?periodo=${periodo}`);
+    },
+
+    // ===== NOVO: CAIXA =====
+    async statusCaixa() {
+        return this.request('/caixa/status');
+    },
+
+    async abrirCaixa(dados) {
+        return this.request('/caixa/abrir', {
+            method: 'POST',
+            body: JSON.stringify(dados)
+        });
+    },
+
+    async fecharCaixa(dados) {
+        return this.request('/caixa/fechar', {
+            method: 'POST',
+            body: JSON.stringify(dados)
+        });
+    },
+
+    async historicoCaixa(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        return this.request(`/caixa/historico${queryString ? '?' + queryString : ''}`);
+    },
+
+    async relatorioSemanal() {
+        return this.request('/caixa/relatorio/semanal');
+    },
+
+    async relatorioMensal() {
+        return this.request('/caixa/relatorio/mensal');
+    },
+
+    // ===== NOVO: EXPORTAÇÃO EXCEL =====
+    async exportarVendas(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        // Para download de arquivo, não usar o método request padrão
+        const url = `${this.baseURL}/exportar/vendas${queryString ? '?' + queryString : ''}`;
+        const token = this.getToken();
+        
+        window.open(url + `&token=${token}`, '_blank');
+        return { success: true };
+    },
+
+    async exportarProdutos() {
+        const url = `${this.baseURL}/exportar/produtos`;
+        const token = this.getToken();
+        window.open(url + `?token=${token}`, '_blank');
+        return { success: true };
+    },
+
+    async exportarCaixa(periodo = 'mes') {
+        const url = `${this.baseURL}/exportar/caixa?periodo=${periodo}`;
+        const token = this.getToken();
+        window.open(url + `&token=${token}`, '_blank');
+        return { success: true };
+    },
+
+    // ===== NOVO: DOSES =====
+    async listarDoses() {
+        return this.request('/doses');
+    },
+
+    async criarDose(dose) {
+        return this.request('/doses', {
+            method: 'POST',
+            body: JSON.stringify(dose)
+        });
+    },
+
+    async atualizarDose(id, dose) {
+        return this.request(`/doses/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(dose)
+        });
+    },
+
+    async atualizarEstoqueDose(id, data) {
+        return this.request(`/doses/${id}/estoque`, {
+            method: 'PUT',
+            body: JSON.stringify(data)
+        });
+    },
+
+    async excluirDose(id) {
+        return this.request(`/doses/${id}`, {
+            method: 'DELETE'
+        });
+    },
+
+    // ===== NOVO: COMBOS =====
+    async listarCombos() {
+        return this.request('/combos');
+    },
+
+    async buscarCombo(id) {
+        return this.request(`/combos/${id}`);
+    },
+
+    async criarCombo(combo) {
+        return this.request('/combos', {
+            method: 'POST',
+            body: JSON.stringify(combo)
+        });
+    },
+
+    async atualizarCombo(id, combo) {
+        return this.request(`/combos/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(combo)
+        });
+    },
+
+    async excluirCombo(id) {
+        return this.request(`/combos/${id}`, {
+            method: 'DELETE'
+        });
+    },
+
+    // ===== MÉTODO PARA FAZER DOWNLOAD DE ARQUIVOS =====
+    async downloadFile(url, filename) {
+        const token = this.getToken();
+        
+        try {
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Erro ao baixar arquivo');
+            }
+            
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(downloadUrl);
+            document.body.removeChild(a);
+            
+            return { success: true };
+        } catch (error) {
+            console.error('Erro no download:', error);
+            throw error;
+        }
     }
 };
