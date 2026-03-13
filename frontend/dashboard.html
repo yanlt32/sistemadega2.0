@@ -1,91 +1,159 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dashboard - Adega System</title>
-    <link rel="stylesheet" href="/css/style.css" />
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - PodPá</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/style-mobile.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  </head>
-  <body>
+</head>
+<body>
     <div class="dashboard-container">
-      <aside class="sidebar">
-        <div class="sidebar-header">
-          <h3>🍷 Adega</h3>
-        </div>
-        <ul class="sidebar-menu">
-          <li class="active"><i>📊</i> <span>Dashboard</span></li>
-          <li onclick="window.location.href = '/produtos.html'">
-            <i>📦</i> <span>Produtos</span>
-          </li>
-          <li onclick="window.location.href = '/vendas.html'">
-            <i>💰</i> <span>Vendas</span>
-          </li>
-          <li onclick="window.location.href = '/categorias.html'">
-            <i>🏷️</i> <span>Categorias</span>
-          </li>
-          <li onclick="window.location.href = '/relatorios.html'">
-            <i>📈</i> <span>Relatórios</span>
-          </li>
-          <li onclick="window.location.href = '/historico-vendas.html'">
-            <i>📋</i> <span>Histórico</span>
-          </li>
-        </ul>
-      </aside>
-
-      <main class="main-content">
-        <div class="top-bar">
-          <h1>Dashboard</h1>
-          <div class="user-info">
-            <span id="userNome"></span>
-            <button class="logout-btn" id="logoutBtn">Sair</button>
-          </div>
-        </div>
-
-        <div class="cards-container">
-          <div class="card">
-            <h3>Vendas Hoje</h3>
-            <div class="value" id="vendasHoje">R$ 0,00</div>
-            <div class="subtitle">Total do dia</div>
-          </div>
-
-          <div class="card">
-            <h3>Lucro Hoje</h3>
-            <div class="value" id="lucroHoje">R$ 0,00</div>
-            <div class="subtitle">Lucro do dia</div>
-          </div>
-
-          <div class="card">
-            <h3>Vendas do Mês</h3>
-            <div class="value" id="vendasMes">R$ 0,00</div>
-            <div class="subtitle">Total mensal</div>
-          </div>
-
-          <div class="card">
-            <h3>Estoque Baixo</h3>
-            <div class="value" id="estoqueBaixo">0</div>
-            <div class="subtitle">Produtos</div>
-          </div>
-        </div>
-
-        <div class="card">
-          <h3>Gráfico de Vendas</h3>
-          <div style="height: 300px">
-            <canvas id="graficoVendas"></canvas>
-          </div>
-        </div>
-
-        <div class="card">
-          <h3>Produtos com Estoque Baixo</h3>
-          <div id="estoqueBaixoLista"></div>
-        </div>
-      </main>
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="company-logo">
+                  <img src="/assets/logo.png" alt="PodPá Logo" onerror="this.style.display='none'">
+                    <h2>PODPÁ</h2>
+                </div>
+            </div>
+<ul class="sidebar-menu">
+    <li class="active">📊 <span>Dashboard</span></li>
+    <li onclick="window.location.href='/produtos.html'">📦 <span>Produtos</span></li>
+    <li onclick="window.location.href='/vendas.html'">💰 <span>Vendas</span></li>
+    <li onclick="window.location.href='/historico-vendas.html'">📋 <span>Histórico</span></li>
+    <li onclick="window.location.href='/categorias.html'">🏷️ <span>Categorias</span></li>
+    <li onclick="window.location.href='/relatorios.html'">📈 <span>Relatórios</span></li>
+</ul>
+        </aside>
+        
+        <main class="main-content">
+            <div class="top-bar">
+                <h1>Dashboard Administrativo</h1>
+                <div class="user-info">
+                    <span id="userNome"></span>
+                    <span id="userRole" class="badge"></span>
+                    <button class="logout-btn" id="logoutBtn">Sair</button>
+                </div>
+            </div>
+            
+            <div class="dashboard-stats">
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <h3>Vendas Hoje</h3>
+                    </div>
+                    <div class="stat-value" id="vendasHoje">R$ 0,00</div>
+                    <div class="stat-label">Total do dia</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <h3>Lucro Hoje</h3>
+                    </div>
+                    <div class="stat-value" id="lucroHoje">R$ 0,00</div>
+                    <div class="stat-label">Lucro do dia</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <h3>Vendas Semana</h3>
+                    </div>
+                    <div class="stat-value" id="vendasSemana">R$ 0,00</div>
+                    <div class="stat-label">Total da semana</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <h3>Lucro Semana</h3>
+                    </div>
+                    <div class="stat-value" id="lucroSemana">R$ 0,00</div>
+                    <div class="stat-label">Lucro semanal</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <h3>Vendas Mês</h3>
+                    </div>
+                    <div class="stat-value" id="vendasMes">R$ 0,00</div>
+                    <div class="stat-label">Total mensal</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <h3>Ticket Médio</h3>
+                    </div>
+                    <div class="stat-value" id="ticketMedio">R$ 0,00</div>
+                    <div class="stat-label">Valor médio</div>
+                </div>
+            </div>
+            
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>Vendas por Dia</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="graficoVendasSemana"></canvas>
+                    </div>
+                </div>
+                
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>Produtos Mais Vendidos</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="graficoProdutos"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="quick-tables">
+                <div class="quick-table">
+                    <div class="quick-table-header">
+                        <h3>Estoque Baixo</h3>
+                        <a href="/produtos.html">Ver todos</a>
+                    </div>
+                    <div id="estoqueBaixoLista"></div>
+                </div>
+                
+                <div class="quick-table">
+                    <div class="quick-table-header">
+                        <h3>Mais Vendidos</h3>
+                        <a href="/relatorios.html">Ver relatório</a>
+                    </div>
+                    <table id="tabelaMaisVendidos">
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="quick-table">
+                <div class="quick-table-header">
+                    <h3>Últimas Vendas</h3>
+                    <a href="/historico-vendas.html">Ver histórico</a>
+                </div>
+                <div class="table-container">
+                    <table id="tabelaUltimasVendas">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Data/Hora</th>
+                                <th>Total</th>
+                                <th>Pagamento</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
     </div>
-
+    
     <script src="/js/api.js"></script>
     <script src="/js/auth.js"></script>
     <script src="/js/app.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/realtime.js"></script>
-  </body>
+    <script src="/js/dashboard-admin.js"></script>
+</body>
 </html>

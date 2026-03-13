@@ -19,7 +19,7 @@ function initializeDatabase() {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT UNIQUE NOT NULL,
             tipo TEXT NOT NULL,
-            cor TEXT DEFAULT '#4CAF50',
+            cor TEXT DEFAULT '#d4af37',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
 
@@ -33,7 +33,7 @@ function initializeDatabase() {
             UNIQUE(nome, categoria_id)
         )`);
 
-        // Criar tabela de usuários (ATUALIZADA com role)
+        // Criar tabela de usuários
         db.run(`CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
@@ -144,7 +144,7 @@ function initializeDatabase() {
             FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
         )`);
 
-        // NOVA TABELA: caixa
+        // Criar tabela de caixa
         db.run(`CREATE TABLE IF NOT EXISTS caixa (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             data_abertura DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -159,7 +159,7 @@ function initializeDatabase() {
             FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
         )`);
 
-        // NOVA TABELA: movimentacoes_caixa
+        // Criar tabela de movimentacoes_caixa
         db.run(`CREATE TABLE IF NOT EXISTS movimentacoes_caixa (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             caixa_id INTEGER,
@@ -183,11 +183,11 @@ function initializeDatabase() {
 
         // Inserir categorias padrão
         db.run(`INSERT OR IGNORE INTO categorias (nome, tipo, cor) VALUES 
-            ('Bebidas', 'bebida', '#2196F3'),
-            ('Comes', 'come', '#FF9800'),
-            ('Doses', 'dose', '#9C27B0'),
-            ('Combos', 'combo', '#E91E63'),
-            ('Outros', 'outro', '#607D8B')`);
+            ('Bebidas', 'bebida', '#d4af37'),
+            ('Comes', 'come', '#c41e3a'),
+            ('Doses', 'dose', '#d4af37'),
+            ('Combos', 'combo', '#c41e3a'),
+            ('Outros', 'outro', '#666666')`);
 
         // Inserir tipos padrão
         db.run(`INSERT OR IGNORE INTO tipos (nome, categoria_id) VALUES 
@@ -198,8 +198,8 @@ function initializeDatabase() {
             ('Suco', (SELECT id FROM categorias WHERE nome = 'Bebidas')),
             ('Dose Simples', (SELECT id FROM categorias WHERE nome = 'Doses')),
             ('Dose Dupla', (SELECT id FROM categorias WHERE nome = 'Doses')),
-            ('Combo Promocional', (SELECT id FROM categorias WHERE nome = 'Combos')),
-            ('Combo Festa', (SELECT id FROM categorias WHERE nome = 'Combos')),
+            ('Combo PodPá', (SELECT id FROM categorias WHERE nome = 'Combos')),
+            ('Combo Especial', (SELECT id FROM categorias WHERE nome = 'Combos')),
             ('Salgado', (SELECT id FROM categorias WHERE nome = 'Comes')),
             ('Doce', (SELECT id FROM categorias WHERE nome = 'Comes')),
             ('Porção', (SELECT id FROM categorias WHERE nome = 'Comes'))`);
@@ -208,16 +208,16 @@ function initializeDatabase() {
         db.run(`INSERT OR IGNORE INTO configuracoes (chave, valor, tipo, descricao) VALUES 
             ('estoque_minimo', '5', 'number', 'Quantidade mínima para alerta de estoque'),
             ('tema', 'dark', 'text', 'Tema do sistema'),
-            ('empresa_nome', 'Adega System', 'text', 'Nome da empresa'),
+            ('empresa_nome', 'PodPá', 'text', 'Nome da empresa'),
             ('caixa_aberto', 'false', 'boolean', 'Status do caixa'),
             ('ultimo_fechamento', '', 'text', 'Data do último fechamento')`);
 
-        console.log('✅ Banco de dados inicializado com sucesso!');
+        console.log('✅ Banco de dados PodPá inicializado!');
     });
 }
 
 async function criarUsuariosPadrao() {
-    const senhaAdmin = await bcrypt.hash('admin123', 10);
+    const senhaAdmin = await bcrypt.hash('podpa201121', 10);
     const senhaFuncionario = await bcrypt.hash('func123', 10);
     
     // Criar admin se não existir
@@ -230,12 +230,25 @@ async function criarUsuariosPadrao() {
         if (!row) {
             db.run(
                 'INSERT INTO usuarios (username, password, nome, email, role) VALUES (?, ?, ?, ?, ?)',
-                ['admin', senhaAdmin, 'Administrador', 'admin@adega.com', 'admin'],
+                ['admin', senhaAdmin, 'Administrador', 'admin@podpa.com', 'admin'],
                 function(err) {
                     if (err) {
                         console.error('Erro ao criar admin:', err);
                     } else {
-                        console.log('✅ Admin criado: admin / admin123');
+                        console.log('✅ Admin criado: admin / podpa201121');
+                    }
+                }
+            );
+        } else {
+            // Se já existe, atualizar a senha
+            db.run(
+                'UPDATE usuarios SET password = ? WHERE username = ?',
+                [senhaAdmin, 'admin'],
+                function(err) {
+                    if (err) {
+                        console.error('Erro ao atualizar senha do admin:', err);
+                    } else {
+                        console.log('✅ Senha do admin atualizada para: podpa201121');
                     }
                 }
             );
@@ -252,7 +265,7 @@ async function criarUsuariosPadrao() {
         if (!row) {
             db.run(
                 'INSERT INTO usuarios (username, password, nome, email, role) VALUES (?, ?, ?, ?, ?)',
-                ['funcionario', senhaFuncionario, 'Funcionário', 'func@adega.com', 'funcionario'],
+                ['funcionario', senhaFuncionario, 'Funcionário', 'func@podpa.com', 'funcionario'],
                 function(err) {
                     if (err) {
                         console.error('Erro ao criar funcionário:', err);
