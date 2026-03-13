@@ -13,18 +13,18 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="company-logo">
-                  <img src="/assets/logo.png" alt="PodPá Logo" onerror="this.style.display='none'">
+                    <img src="/assets/logo.png" alt="PodPá Logo" onerror="this.style.display='none'">
                     <h2>PODPÁ</h2>
                 </div>
             </div>
-<ul class="sidebar-menu">
-    <li class="active">📊 <span>Dashboard</span></li>
-    <li onclick="window.location.href='/produtos.html'">📦 <span>Produtos</span></li>
-    <li onclick="window.location.href='/vendas.html'">💰 <span>Vendas</span></li>
-    <li onclick="window.location.href='/historico-vendas.html'">📋 <span>Histórico</span></li>
-    <li onclick="window.location.href='/categorias.html'">🏷️ <span>Categorias</span></li>
-    <li onclick="window.location.href='/relatorios.html'">📈 <span>Relatórios</span></li>
-</ul>
+            <ul class="sidebar-menu">
+                <li class="active">📊 <span>Dashboard</span></li>
+                <li onclick="window.location.href='/produtos.html'">📦 <span>Produtos</span></li>
+                <li onclick="window.location.href='/vendas.html'">💰 <span>Vendas</span></li>
+                <li onclick="window.location.href='/historico-vendas.html'">📋 <span>Histórico</span></li>
+                <li onclick="window.location.href='/categorias.html'">🏷️ <span>Categorias</span></li>
+                <li onclick="window.location.href='/relatorios.html'">📈 <span>Relatórios</span></li>
+            </ul>
         </aside>
         
         <main class="main-content">
@@ -37,6 +37,7 @@
                 </div>
             </div>
             
+            <!-- Cards de Estatísticas -->
             <div class="dashboard-stats">
                 <div class="stat-card">
                     <div class="stat-header">
@@ -80,13 +81,14 @@
                 
                 <div class="stat-card">
                     <div class="stat-header">
-                        <h3>Ticket Médio</h3>
+                        <h3>Estoque Baixo</h3>
                     </div>
-                    <div class="stat-value" id="ticketMedio">R$ 0,00</div>
-                    <div class="stat-label">Valor médio</div>
+                    <div class="stat-value" id="estoqueBaixo">0</div>
+                    <div class="stat-label">Produtos</div>
                 </div>
             </div>
             
+            <!-- Gráficos -->
             <div class="charts-grid">
                 <div class="chart-card">
                     <div class="chart-header">
@@ -107,10 +109,11 @@
                 </div>
             </div>
             
+            <!-- Tabelas Rápidas -->
             <div class="quick-tables">
                 <div class="quick-table">
                     <div class="quick-table-header">
-                        <h3>Estoque Baixo</h3>
+                        <h3>⚠️ Estoque Baixo</h3>
                         <a href="/produtos.html">Ver todos</a>
                     </div>
                     <div id="estoqueBaixoLista"></div>
@@ -118,18 +121,17 @@
                 
                 <div class="quick-table">
                     <div class="quick-table-header">
-                        <h3>Mais Vendidos</h3>
+                        <h3>🏆 Mais Vendidos</h3>
                         <a href="/relatorios.html">Ver relatório</a>
                     </div>
-                    <table id="tabelaMaisVendidos">
-                        <tbody></tbody>
-                    </table>
+                    <div id="produtoMaisVendido"></div>
                 </div>
             </div>
             
+            <!-- Últimas Vendas -->
             <div class="quick-table">
                 <div class="quick-table-header">
-                    <h3>Últimas Vendas</h3>
+                    <h3>🕐 Últimas Vendas</h3>
                     <a href="/historico-vendas.html">Ver histórico</a>
                 </div>
                 <div class="table-container">
@@ -149,10 +151,10 @@
         </main>
     </div>
     
+    <!-- Scripts -->
     <script src="/js/api.js"></script>
     <script src="/js/auth.js"></script>
     <script src="/js/app.js"></script>
-    <script src="/socket.io/socket.io.js"></script>
     <script src="/js/realtime.js"></script>
     <script src="/js/dashboard-admin.js"></script>
 </body>

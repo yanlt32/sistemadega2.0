@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Funcionário - PodPá</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="company-logo">
+                    <img src="/assets/logo.png" alt="PodPá Logo" class="logo-img" onerror="this.style.display='none'">
+                    <h2 class="logo-text">PodPá</h2>
+                </div>
+            </div>
+            <ul class="sidebar-menu">
+                <li class="active">📊 <span>Dashboard</span></li>
+                <li onclick="window.location.href='/produtos.html'">📦 <span>Produtos</span></li>
+                <li onclick="window.location.href='/vendas.html'">💰 <span>Vendas</span></li>
+                <li onclick="window.location.href='/historico-vendas.html'">📋 <span>Histórico</span></li>
+            </ul>
+        </aside>
+        
+        <main class="main-content">
+            <div class="top-bar">
+                <h1>Dashboard do Funcionário</h1>
+                <div class="user-info">
+                    <span id="userNome"></span>
+                    <span id="userRole" class="badge badge-info">Funcionário</span>
+                    <button class="logout-btn" id="logoutBtn">Sair</button>
+                </div>
+            </div>
+            
+            <!-- Cards simples para funcionário -->
+            <div class="dashboard-stats">
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <h3>Vendas Hoje</h3>
+                        <span class="stat-icon">💰</span>
+                    </div>
+                    <div class="stat-value" id="vendasHoje">0</div>
+                    <div class="stat-label">Total de vendas</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <h3>Produtos em Estoque</h3>
+                        <span class="stat-icon">📦</span>
+                    </div>
+                    <div class="stat-value" id="produtosEmEstoque">...</div>
+                    <div class="stat-label">Unidades disponíveis</div>
+                </div>
+            </div>
+            
+            <!-- Estoque Baixo -->
+            <div class="quick-table">
+                <div class="quick-table-header">
+                    <h3>⚠️ Produtos com Estoque Baixo</h3>
+                    <a href="/produtos.html">Ver todos</a>
+                </div>
+                <div id="estoqueBaixoLista"></div>
+            </div>
+            
+            <!-- Últimas Vendas -->
+            <div class="quick-table">
+                <div class="quick-table-header">
+                    <h3>🕐 Últimas Vendas</h3>
+                    <a href="/historico-vendas.html">Ver histórico</a>
+                </div>
+                <div class="table-container">
+                    <table id="ultimasVendasTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Data/Hora</th>
+                                <th>Total</th>
+                                <th>Pagamento</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/app.js"></script>
+    <script src="/js/dashboard-funcionario.js"></script>
+</body>
+</html>

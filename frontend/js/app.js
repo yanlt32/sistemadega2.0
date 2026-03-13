@@ -53,30 +53,36 @@ class App {
             logoutBtn.addEventListener('click', () => Auth.logout());
         }
     }
-
-    static checkCurrentPage() {
-        const path = window.location.pathname;
-        
-        if (path.includes('dashboard.html')) {
-            Dashboard.init();
-        } else if (path.includes('produtos.html')) {
-            Produtos.init();
-        } else if (path.includes('vendas.html')) {
-            Vendas.init();
-        } else if (path.includes('categorias.html')) {
-            CategoriasManager.init();
-        } else if (path.includes('relatorios.html')) {
-            Relatorios.init();
-        } else if (path.includes('caixa.html')) {
-            if (window.Caixa) {
-                Caixa.init();
+static checkCurrentPage() {
+    const path = window.location.pathname;
+    const user = Auth.getCurrentUser();
+    
+    if (path.includes('dashboard.html')) {
+        // Verificar perfil e carregar dashboard apropriado
+        if (user && user.role === 'admin') {
+            if (window.DashboardAdmin) {
+                DashboardAdmin.init();
+            } else {
+                Dashboard.init(); // Fallback para o dashboard antigo
             }
-        } else if (path.includes('historico-vendas.html')) {
-            if (window.HistoricoVendas) {
-                HistoricoVendas.init();
-            }
+        } else {
+            // Funcionário vai para vendas
+            window.location.href = '/vendas.html';
+        }
+    } else if (path.includes('produtos.html')) {
+        Produtos.init();
+    } else if (path.includes('vendas.html')) {
+        Vendas.init();
+    } else if (path.includes('categorias.html')) {
+        CategoriasManager.init();
+    } else if (path.includes('relatorios.html')) {
+        Relatorios.init();
+    } else if (path.includes('historico-vendas.html')) {
+        if (window.HistoricoVendas) {
+            HistoricoVendas.init();
         }
     }
+}
 
     static closeAllModals() {
         document.querySelectorAll('.modal').forEach(modal => {
@@ -321,7 +327,7 @@ const UI = {
 };
 
 // ============================================
-// MÓDULO DASHBOARD (ATUALIZADO COM PERFIL)
+// MÓDULO DASHBOARD ADMIN (CORRIGIDO)
 // ============================================
 const Dashboard = {
     charts: {},
@@ -329,61 +335,45 @@ const Dashboard = {
     
     async init() {
         await Auth.checkAuth();
-        this.verificarPermissoes();
+        
+        // Verificar se é admin
+        if (!Auth.isAdmin()) {
+            window.location.href = '/vendas.html';
+            return;
+        }
+        
         await this.loadData();
         this.setupCharts();
         this.startAutoRefresh();
-    },
-
-    verificarPermissoes() {
-        const isAdmin = Auth.isAdmin();
-        
-        // Esconder cards financeiros para funcionário
-        if (!isAdmin) {
-            const cardsFinanceiros = document.querySelectorAll('.card.financeiro');
-            cardsFinanceiros.forEach(card => {
-                card.style.display = 'none';
-            });
-        }
     },
     
     async loadData() {
         try {
             UI.showLoading();
             
-            const promises = [];
-            
-            // Sempre carregar estoque baixo
-            promises.push(API.estoqueBaixo().catch(() => []));
-            
-            // Se for admin, carrega dados financeiros
-            if (Auth.isAdmin()) {
-                promises.push(
-                    API.lucroDiario().catch(() => ({ total_vendas: 0, total_lucro: 0 })),
-                    API.lucroMensal().catch(() => ({ total_vendas: 0, total_lucro: 0 })),
-                    API.vendasPorPeriodo('dia').catch(() => [])
-                );
-            } else {
-                // Funcionário não vê dados financeiros
-                promises.push(
-                    Promise.resolve({ total_vendas: 0, total_lucro: 0 }),
-                    Promise.resolve({ total_vendas: 0, total_lucro: 0 }),
-                    Promise.resolve([])
-                );
-            }
-            
-            const [estoqueBaixo, lucroDiario, lucroMensal, vendasPeriodo] = await Promise.all(promises);
+            // Buscar dados necessários para o dashboard
+            const [lucroDiario, lucroMensal, estoqueBaixo, vendasPeriodo, produtoMaisVendido] = await Promise.all([
+                API.lucroDiario().catch(() => ({ total_vendas: 0, total_lucro: 0, quantidade_vendas: 0 })),
+                API.lucroMensal().catch(() => ({ total_vendas: 0, total_lucro: 0 })),
+                API.estoqueBaixo().catch(() => []),
+                API.vendasPorPeriodo('dia').catch(() => []),
+                API.produtoMaisVendido().catch(() => null)
+            ]);
             
             this.data = {
                 lucroDiario,
                 lucroMensal,
                 estoqueBaixo,
-                vendasPeriodo
+                vendasPeriodo: vendasPeriodo.slice(0, 7).reverse(),
+                produtoMaisVendido
             };
             
             this.updateCards();
             this.updateCharts();
             this.showLowStock();
+            this.showProdutoMaisVendido();
+            this.carregarUltimasVendas();
+            
         } catch (error) {
             console.error('Erro ao carregar dados do dashboard:', error);
             App.showNotification('Erro ao carregar dados do dashboard', 'danger');
@@ -396,102 +386,179 @@ const Dashboard = {
         const elements = {
             vendasHoje: document.getElementById('vendasHoje'),
             lucroHoje: document.getElementById('lucroHoje'),
+            vendasSemana: document.getElementById('vendasSemana'),
+            lucroSemana: document.getElementById('lucroSemana'),
             vendasMes: document.getElementById('vendasMes'),
-            estoqueBaixo: document.getElementById('estoqueBaixo')
+            estoqueBaixo: document.getElementById('estoqueBaixo'),
+            ticketMedio: document.getElementById('ticketMedio')
         };
         
-        const isAdmin = Auth.isAdmin();
-        
-        if (elements.vendasHoje && isAdmin) {
+        if (elements.vendasHoje) {
             elements.vendasHoje.textContent = UI.formatCurrency(this.data.lucroDiario?.total_vendas || 0);
-        } else if (elements.vendasHoje) {
-            elements.vendasHoje.parentElement.style.display = 'none';
         }
         
-        if (elements.lucroHoje && isAdmin) {
+        if (elements.lucroHoje) {
             elements.lucroHoje.textContent = UI.formatCurrency(this.data.lucroDiario?.total_lucro || 0);
-        } else if (elements.lucroHoje) {
-            elements.lucroHoje.parentElement.style.display = 'none';
         }
         
-        if (elements.vendasMes && isAdmin) {
+        if (elements.vendasSemana) {
+            const totalSemana = this.data.vendasPeriodo.reduce((acc, d) => acc + (d.total_vendas || 0), 0);
+            elements.vendasSemana.textContent = UI.formatCurrency(totalSemana);
+        }
+        
+        if (elements.lucroSemana) {
+            const lucroSemana = this.data.vendasPeriodo.reduce((acc, d) => acc + (d.total_lucro || 0), 0);
+            elements.lucroSemana.textContent = UI.formatCurrency(lucroSemana);
+        }
+        
+        if (elements.vendasMes) {
             elements.vendasMes.textContent = UI.formatCurrency(this.data.lucroMensal?.total_vendas || 0);
-        } else if (elements.vendasMes) {
-            elements.vendasMes.parentElement.style.display = 'none';
         }
         
         if (elements.estoqueBaixo) {
             elements.estoqueBaixo.textContent = this.data.estoqueBaixo?.length || 0;
         }
+        
+        if (elements.ticketMedio) {
+            const qtd = this.data.lucroDiario?.quantidade_vendas || 1;
+            const ticket = (this.data.lucroDiario?.total_vendas || 0) / qtd;
+            elements.ticketMedio.textContent = UI.formatCurrency(ticket);
+        }
     },
     
     setupCharts() {
-        if (!Auth.isAdmin()) return; // Funcionário não vê gráficos
-        
-        const ctxVendas = document.getElementById('graficoVendas')?.getContext('2d');
-        if (!ctxVendas) return;
-        
-        if (this.charts.vendas) {
-            this.charts.vendas.destroy();
-        }
-        
-        this.charts.vendas = new Chart(ctxVendas, {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: 'Vendas',
-                    data: [],
-                    borderColor: '#00c853',
-                    backgroundColor: 'rgba(0, 200, 83, 0.1)',
-                    tension: 0.4,
-                    fill: true
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        labels: {
-                            color: '#e4e6eb'
-                        }
-                    }
+        // Gráfico de Vendas por Dia
+        const ctxVendas = document.getElementById('graficoVendasSemana')?.getContext('2d');
+        if (ctxVendas) {
+            if (this.charts.vendas) {
+                this.charts.vendas.destroy();
+            }
+            
+            this.charts.vendas = new Chart(ctxVendas, {
+                type: 'line',
+                data: {
+                    labels: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'],
+                    datasets: [{
+                        label: 'Vendas (R$)',
+                        data: [0, 0, 0, 0, 0, 0, 0],
+                        borderColor: '#c4a747',
+                        backgroundColor: 'rgba(196, 167, 71, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true,
+                        pointBackgroundColor: '#c4a747',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 4
+                    }]
                 },
-                scales: {
-                    y: {
-                        grid: {
-                            color: '#2f3742'
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
                         },
-                        ticks: {
-                            color: '#b0b3b8',
-                            callback: (value) => UI.formatCurrency(value)
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    return `Vendas: ${UI.formatCurrency(context.raw)}`;
+                                }
+                            }
                         }
                     },
-                    x: {
-                        grid: {
-                            color: '#2f3742'
+                    scales: {
+                        y: {
+                            grid: {
+                                color: '#2d3540'
+                            },
+                            ticks: {
+                                color: '#94a3b8',
+                                callback: (value) => 'R$ ' + value
+                            }
                         },
-                        ticks: {
-                            color: '#b0b3b8'
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                color: '#94a3b8'
+                            }
                         }
                     }
                 }
+            });
+        }
+        
+        // Gráfico de Produtos Mais Vendidos
+        const ctxProdutos = document.getElementById('graficoProdutos')?.getContext('2d');
+        if (ctxProdutos) {
+            if (this.charts.produtos) {
+                this.charts.produtos.destroy();
             }
-        });
+            
+            this.charts.produtos = new Chart(ctxProdutos, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Aguardando dados...'],
+                    datasets: [{
+                        data: [1],
+                        backgroundColor: ['#c4a747'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '70%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#94a3b8',
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    return `${context.label}: ${context.raw} unidades`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
     },
     
     updateCharts() {
-        if (!Auth.isAdmin()) return;
-        
+        // Atualizar gráfico de vendas
         if (this.charts.vendas && this.data.vendasPeriodo && this.data.vendasPeriodo.length > 0) {
-            this.charts.vendas.data.labels = this.data.vendasPeriodo.map(d => 
-                UI.formatDate(d.periodo)
-            );
-            this.charts.vendas.data.datasets[0].data = this.data.vendasPeriodo.map(d => 
-                d.total_vendas || 0
-            );
+            // Mapear dados para os dias da semana
+            const dadosSemana = [0, 0, 0, 0, 0, 0, 0];
+            
+            this.data.vendasPeriodo.forEach((item, index) => {
+                if (index < 7) {
+                    dadosSemana[index] = item.total_vendas || 0;
+                }
+            });
+            
+            this.charts.vendas.data.datasets[0].data = dadosSemana;
             this.charts.vendas.update();
+        }
+        
+        // Atualizar gráfico de produtos mais vendidos
+        if (this.charts.produtos && this.data.produtoMaisVendido && this.data.produtoMaisVendido.nome) {
+            this.charts.produtos.data.labels = [this.data.produtoMaisVendido.nome, 'Outros'];
+            this.charts.produtos.data.datasets[0].data = [
+                this.data.produtoMaisVendido.total_vendido || 1,
+                1
+            ];
+            this.charts.produtos.data.datasets[0].backgroundColor = ['#c4a747', '#2d3540'];
+            this.charts.produtos.update();
         }
     },
     
@@ -501,29 +568,73 @@ const Dashboard = {
         
         if (!this.data.estoqueBaixo || this.data.estoqueBaixo.length === 0) {
             container.innerHTML = `
-                <div class="alert alert-success">
+                <div style="color: var(--text-muted); text-align: center; padding: 15px;">
                     ✅ Todos os produtos estão com estoque adequado
                 </div>
             `;
             return;
         }
         
-        container.innerHTML = this.data.estoqueBaixo.map(p => `
-            <div class="alert alert-warning" style="margin-bottom: 10px;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <strong>${p.nome}</strong>
-                        <br>
-                        <small>Estoque atual: ${p.quantidade} unidades</small>
-                    </div>
-                    ${Auth.isAdmin() ? `
-                        <button class="btn btn-primary btn-sm" onclick="Produtos.abrirModalEstoque(${p.id})">
-                            Repor
-                        </button>
-                    ` : ''}
+        container.innerHTML = this.data.estoqueBaixo.slice(0, 5).map(p => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid var(--border-color);">
+                <div>
+                    <strong>${p.nome}</strong>
+                    <br>
+                    <small>Estoque atual: ${p.quantidade} unidades</small>
                 </div>
+                <button class="btn btn-primary btn-sm" onclick="Produtos.abrirModalEstoque(${p.id})">
+                    Repor
+                </button>
             </div>
         `).join('');
+    },
+    
+    showProdutoMaisVendido() {
+        const container = document.getElementById('produtoMaisVendido');
+        if (!container) return;
+        
+        if (this.data.produtoMaisVendido && this.data.produtoMaisVendido.nome) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 15px;">
+                    <div style="font-size: 24px; margin-bottom: 10px;">🏆</div>
+                    <h4 style="color: var(--accent-primary); margin-bottom: 5px;">${this.data.produtoMaisVendido.nome}</h4>
+                    <p style="color: var(--text-muted);">${this.data.produtoMaisVendido.total_vendido || 0} unidades vendidas</p>
+                </div>
+            `;
+        } else {
+            container.innerHTML = `
+                <div style="color: var(--text-muted); text-align: center; padding: 15px;">
+                    Nenhuma venda registrada ainda
+                </div>
+            `;
+        }
+    },
+    
+    async carregarUltimasVendas() {
+        try {
+            const response = await API.listarVendas({ limite: 5 });
+            const vendas = response.vendas || [];
+            
+            const tbody = document.querySelector('#tabelaUltimasVendas tbody');
+            if (!tbody) return;
+            
+            if (vendas.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Nenhuma venda recente</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = vendas.map(v => `
+                <tr>
+                    <td>#${v.id}</td>
+                    <td>${new Date(v.data_venda).toLocaleString('pt-BR')}</td>
+                    <td>${UI.formatCurrency(v.total)}</td>
+                    <td><span class="badge badge-success">${v.forma_pagamento}</span></td>
+                </tr>
+            `).join('');
+            
+        } catch (error) {
+            console.error('Erro ao carregar últimas vendas:', error);
+        }
     },
     
     startAutoRefresh() {
@@ -531,10 +642,9 @@ const Dashboard = {
             if (document.visibilityState === 'visible') {
                 this.loadData();
             }
-        }, 300000);
+        }, 30000); // Atualizar a cada 30 segundos
     }
 };
-
 // ============================================
 // MÓDULO DE PRODUTOS (ATUALIZADO COM PERFIL)
 // ============================================
