@@ -5,7 +5,7 @@ services:
     repo: https://github.com/yanlt32/sistemadega2.0
     plan: free
     region: oregon
-    buildCommand: cd backend && npm install
+    buildCommand: cd backend && npm install --build-from-source
     startCommand: cd backend && npm start
     healthCheckPath: /health
     envVars:
