@@ -1,12 +1,13 @@
 services:
   - type: web
     name: adega-system
-    env: node
+    runtime: node
+    repo: https://github.com/yanlt32/sistemadega2.0
+    plan: free
+    region: oregon
     buildCommand: cd backend && npm install
     startCommand: cd backend && npm start
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 10000
-    plan: free

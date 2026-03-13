@@ -44,6 +44,10 @@ app.use('/api/vendas', require('./routes/vendaRoutes'));
 app.use('/api/relatorios', require('./routes/relatorioRoutes'));
 app.use('/api/categorias', require('./routes/categoriaRoutes'));
 app.use('/api/tipos', require('./routes/tipoRoutes'));
+app.use('/api/doses', require('./routes/doseRoutes'));
+app.use('/api/combos', require('./routes/comboRoutes'));
+app.use('/api/caixa', require('./routes/caixaRoutes'));
+app.use('/api/exportar', require('./routes/exportacaoRoutes'));
 
 // Rota para servir o frontend
 app.get('/', (req, res) => {
