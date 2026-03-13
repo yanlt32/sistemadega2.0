@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');  // ← MUDAR AQUI para bcryptjs
 const { db } = require('../models/database');
 
 const SECRET_KEY = 'sua_chave_secreta_super_segura_2024';
@@ -22,6 +22,7 @@ const authController = {
                     return res.status(401).json({ error: 'Usuário ou senha inválidos' });
                 }
 
+                // bcryptjs usa o mesmo método compare
                 const senhaValida = await bcrypt.compare(password, user.password);
                 
                 if (!senhaValida) {
