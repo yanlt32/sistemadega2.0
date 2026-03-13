@@ -53,34 +53,92 @@ class App {
             logoutBtn.addEventListener('click', () => Auth.logout());
         }
     }
-static checkCurrentPage() {
+
+    static checkCurrentPage() {
     const path = window.location.pathname;
     const user = Auth.getCurrentUser();
     
+    console.log('Página atual:', path, 'Usuário:', user);
+    
+    // Se não tiver usuário e não for página de login
+    if (!user && !path.includes('index.html') && path !== '/') {
+        window.location.href = '/';
+        return;
+    }
+    
+    // DASHBOARD - APENAS ADMIN
     if (path.includes('dashboard.html')) {
-        // Verificar perfil e carregar dashboard apropriado
         if (user && user.role === 'admin') {
+            console.log('Carregando dashboard admin');
             if (window.DashboardAdmin) {
                 DashboardAdmin.init();
             } else {
-                Dashboard.init(); // Fallback para o dashboard antigo
+                Dashboard.init();
             }
         } else {
-            // Funcionário vai para vendas
+            // Funcionário é redirecionado para vendas
+            console.log('Funcionário redirecionado para vendas');
             window.location.href = '/vendas.html';
         }
-    } else if (path.includes('produtos.html')) {
+        return;
+    }
+    
+    // PRODUTOS - todos podem (com permissões diferentes)
+    if (path.includes('produtos.html')) {
         Produtos.init();
-    } else if (path.includes('vendas.html')) {
+        return;
+    }
+    
+    // VENDAS - todos podem
+    if (path.includes('vendas.html')) {
         Vendas.init();
-    } else if (path.includes('categorias.html')) {
-        CategoriasManager.init();
-    } else if (path.includes('relatorios.html')) {
-        Relatorios.init();
-    } else if (path.includes('historico-vendas.html')) {
-        if (window.HistoricoVendas) {
-            HistoricoVendas.init();
+        return;
+    }
+    
+    // HISTÓRICO - todos podem
+    if (path.includes('historico-vendas.html')) {
+        if (window.HistoricoVendas) HistoricoVendas.init();
+        return;
+    }
+    
+    // CATEGORIAS - apenas admin
+    if (path.includes('categorias.html')) {
+        if (user?.role === 'admin') {
+            CategoriasManager.init();
+        } else {
+            window.location.href = '/vendas.html';
         }
+        return;
+    }
+    
+    // RELATÓRIOS - apenas admin
+    if (path.includes('relatorios.html')) {
+        if (user?.role === 'admin') {
+            Relatorios.init();
+        } else {
+            window.location.href = '/vendas.html';
+        }
+        return;
+    }
+    
+    // GASTOS - apenas admin
+    if (path.includes('gastos.html')) {
+        if (user?.role === 'admin') {
+            if (window.Gastos) Gastos.init();
+        } else {
+            window.location.href = '/vendas.html';
+        }
+        return;
+    }
+    
+    // FINANCEIRO - apenas admin
+    if (path.includes('financeiro.html')) {
+        if (user?.role === 'admin') {
+            if (window.Financeiro) Financeiro.init();
+        } else {
+            window.location.href = '/vendas.html';
+        }
+        return;
     }
 }
 
@@ -114,7 +172,7 @@ static checkCurrentPage() {
 }
 
 // ============================================
-// MÓDULO DE AUTENTICAÇÃO (ATUALIZADO COM PERFIL)
+// MÓDULO DE AUTENTICAÇÃO
 // ============================================
 const Auth = {
     currentUser: null,
@@ -228,7 +286,7 @@ const Auth = {
         roleElements.forEach(el => {
             if (el) {
                 const role = user?.role || 'funcionario';
-                el.textContent = role === 'admin' ? '👑 Admin' : '👤 Funcionário';
+                el.textContent = role === 'admin' ? 'Admin' : 'Funcionário';
                 el.className = `badge ${role === 'admin' ? 'badge-success' : 'badge-info'}`;
             }
         });
@@ -241,19 +299,20 @@ const Auth = {
         menuItems.forEach(item => {
             const text = item.textContent || '';
             
-            // Itens que apenas admin pode ver
-            if (text.includes('Relatórios') || text.includes('Categorias')) {
+            // Itens que apenas ADMIN pode ver
+            if (text.includes('Gastos') || 
+                text.includes('Financeiro') || 
+                text.includes('Relatórios') || 
+                text.includes('Categorias')) {
                 item.style.display = isAdmin ? 'flex' : 'none';
             }
             
-            // Item de caixa todos veem
-            if (text.includes('Caixa')) {
+            // Itens que TODOS podem ver
+            if (text.includes('Dashboard') || 
+                text.includes('Produtos') || 
+                text.includes('Vendas') || 
+                text.includes('Histórico')) {
                 item.style.display = 'flex';
-            }
-            
-            // Item de produtos - funcionário só vê, não edita
-            if (text.includes('Produtos') && !isAdmin) {
-                // Vai ser tratado no próprio módulo
             }
         });
 
@@ -327,7 +386,7 @@ const UI = {
 };
 
 // ============================================
-// MÓDULO DASHBOARD ADMIN (CORRIGIDO)
+// MÓDULO DASHBOARD ADMIN
 // ============================================
 const Dashboard = {
     charts: {},
@@ -336,7 +395,6 @@ const Dashboard = {
     async init() {
         await Auth.checkAuth();
         
-        // Verificar se é admin
         if (!Auth.isAdmin()) {
             window.location.href = '/vendas.html';
             return;
@@ -351,7 +409,6 @@ const Dashboard = {
         try {
             UI.showLoading();
             
-            // Buscar dados necessários para o dashboard
             const [lucroDiario, lucroMensal, estoqueBaixo, vendasPeriodo, produtoMaisVendido] = await Promise.all([
                 API.lucroDiario().catch(() => ({ total_vendas: 0, total_lucro: 0, quantidade_vendas: 0 })),
                 API.lucroMensal().catch(() => ({ total_vendas: 0, total_lucro: 0 })),
@@ -371,12 +428,11 @@ const Dashboard = {
             this.updateCards();
             this.updateCharts();
             this.showLowStock();
-            this.showProdutoMaisVendido();
             this.carregarUltimasVendas();
             
         } catch (error) {
             console.error('Erro ao carregar dados do dashboard:', error);
-            App.showNotification('Erro ao carregar dados do dashboard', 'danger');
+            App.showNotification('Erro ao carregar dados', 'danger');
         } finally {
             UI.hideLoading();
         }
@@ -389,8 +445,7 @@ const Dashboard = {
             vendasSemana: document.getElementById('vendasSemana'),
             lucroSemana: document.getElementById('lucroSemana'),
             vendasMes: document.getElementById('vendasMes'),
-            estoqueBaixo: document.getElementById('estoqueBaixo'),
-            ticketMedio: document.getElementById('ticketMedio')
+            estoqueBaixo: document.getElementById('estoqueBaixo')
         };
         
         if (elements.vendasHoje) {
@@ -418,22 +473,11 @@ const Dashboard = {
         if (elements.estoqueBaixo) {
             elements.estoqueBaixo.textContent = this.data.estoqueBaixo?.length || 0;
         }
-        
-        if (elements.ticketMedio) {
-            const qtd = this.data.lucroDiario?.quantidade_vendas || 1;
-            const ticket = (this.data.lucroDiario?.total_vendas || 0) / qtd;
-            elements.ticketMedio.textContent = UI.formatCurrency(ticket);
-        }
     },
     
     setupCharts() {
-        // Gráfico de Vendas por Dia
         const ctxVendas = document.getElementById('graficoVendasSemana')?.getContext('2d');
         if (ctxVendas) {
-            if (this.charts.vendas) {
-                this.charts.vendas.destroy();
-            }
-            
             this.charts.vendas = new Chart(ctxVendas, {
                 type: 'line',
                 data: {
@@ -443,90 +487,27 @@ const Dashboard = {
                         data: [0, 0, 0, 0, 0, 0, 0],
                         borderColor: '#c4a747',
                         backgroundColor: 'rgba(196, 167, 71, 0.1)',
-                        borderWidth: 2,
                         tension: 0.4,
-                        fill: true,
-                        pointBackgroundColor: '#c4a747',
-                        pointBorderColor: '#fff',
-                        pointBorderWidth: 2,
-                        pointRadius: 4
+                        fill: true
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: {
-                            display: false
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: (context) => {
-                                    return `Vendas: ${UI.formatCurrency(context.raw)}`;
-                                }
-                            }
-                        }
+                        legend: { display: false }
                     },
                     scales: {
                         y: {
-                            grid: {
-                                color: '#2d3540'
-                            },
+                            grid: { color: '#2d3540' },
                             ticks: {
                                 color: '#94a3b8',
                                 callback: (value) => 'R$ ' + value
                             }
                         },
                         x: {
-                            grid: {
-                                display: false
-                            },
-                            ticks: {
-                                color: '#94a3b8'
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        
-        // Gráfico de Produtos Mais Vendidos
-        const ctxProdutos = document.getElementById('graficoProdutos')?.getContext('2d');
-        if (ctxProdutos) {
-            if (this.charts.produtos) {
-                this.charts.produtos.destroy();
-            }
-            
-            this.charts.produtos = new Chart(ctxProdutos, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Aguardando dados...'],
-                    datasets: [{
-                        data: [1],
-                        backgroundColor: ['#c4a747'],
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    cutout: '70%',
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                color: '#94a3b8',
-                                font: {
-                                    size: 12
-                                }
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: (context) => {
-                                    return `${context.label}: ${context.raw} unidades`;
-                                }
-                            }
+                            grid: { display: false },
+                            ticks: { color: '#94a3b8' }
                         }
                     }
                 }
@@ -535,30 +516,14 @@ const Dashboard = {
     },
     
     updateCharts() {
-        // Atualizar gráfico de vendas
-        if (this.charts.vendas && this.data.vendasPeriodo && this.data.vendasPeriodo.length > 0) {
-            // Mapear dados para os dias da semana
+        if (this.charts.vendas && this.data.vendasPeriodo.length > 0) {
             const dadosSemana = [0, 0, 0, 0, 0, 0, 0];
-            
             this.data.vendasPeriodo.forEach((item, index) => {
-                if (index < 7) {
-                    dadosSemana[index] = item.total_vendas || 0;
-                }
+                if (index < 7) dadosSemana[index] = item.total_vendas || 0;
             });
             
             this.charts.vendas.data.datasets[0].data = dadosSemana;
             this.charts.vendas.update();
-        }
-        
-        // Atualizar gráfico de produtos mais vendidos
-        if (this.charts.produtos && this.data.produtoMaisVendido && this.data.produtoMaisVendido.nome) {
-            this.charts.produtos.data.labels = [this.data.produtoMaisVendido.nome, 'Outros'];
-            this.charts.produtos.data.datasets[0].data = [
-                this.data.produtoMaisVendido.total_vendido || 1,
-                1
-            ];
-            this.charts.produtos.data.datasets[0].backgroundColor = ['#c4a747', '#2d3540'];
-            this.charts.produtos.update();
         }
     },
     
@@ -566,12 +531,8 @@ const Dashboard = {
         const container = document.getElementById('estoqueBaixoLista');
         if (!container) return;
         
-        if (!this.data.estoqueBaixo || this.data.estoqueBaixo.length === 0) {
-            container.innerHTML = `
-                <div style="color: var(--text-muted); text-align: center; padding: 15px;">
-                    ✅ Todos os produtos estão com estoque adequado
-                </div>
-            `;
+        if (!this.data.estoqueBaixo?.length) {
+            container.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 15px;">✅ Todos os produtos estão com estoque adequado</div>';
             return;
         }
         
@@ -580,34 +541,11 @@ const Dashboard = {
                 <div>
                     <strong>${p.nome}</strong>
                     <br>
-                    <small>Estoque atual: ${p.quantidade} unidades</small>
+                    <small>Estoque: ${p.quantidade} unidades</small>
                 </div>
-                <button class="btn btn-primary btn-sm" onclick="Produtos.abrirModalEstoque(${p.id})">
-                    Repor
-                </button>
+                <button class="btn btn-primary btn-sm" onclick="Produtos.abrirModalEstoque(${p.id})">Repor</button>
             </div>
         `).join('');
-    },
-    
-    showProdutoMaisVendido() {
-        const container = document.getElementById('produtoMaisVendido');
-        if (!container) return;
-        
-        if (this.data.produtoMaisVendido && this.data.produtoMaisVendido.nome) {
-            container.innerHTML = `
-                <div style="text-align: center; padding: 15px;">
-                    <div style="font-size: 24px; margin-bottom: 10px;">🏆</div>
-                    <h4 style="color: var(--accent-primary); margin-bottom: 5px;">${this.data.produtoMaisVendido.nome}</h4>
-                    <p style="color: var(--text-muted);">${this.data.produtoMaisVendido.total_vendido || 0} unidades vendidas</p>
-                </div>
-            `;
-        } else {
-            container.innerHTML = `
-                <div style="color: var(--text-muted); text-align: center; padding: 15px;">
-                    Nenhuma venda registrada ainda
-                </div>
-            `;
-        }
     },
     
     async carregarUltimasVendas() {
@@ -618,17 +556,12 @@ const Dashboard = {
             const tbody = document.querySelector('#tabelaUltimasVendas tbody');
             if (!tbody) return;
             
-            if (vendas.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Nenhuma venda recente</td></tr>';
-                return;
-            }
-            
             tbody.innerHTML = vendas.map(v => `
                 <tr>
                     <td>#${v.id}</td>
                     <td>${new Date(v.data_venda).toLocaleString('pt-BR')}</td>
                     <td>${UI.formatCurrency(v.total)}</td>
-                    <td><span class="badge badge-success">${v.forma_pagamento}</span></td>
+                    <td><span class="badge badge-success">${v.forma_pagamento || 'N/A'}</span></td>
                 </tr>
             `).join('');
             
@@ -642,11 +575,12 @@ const Dashboard = {
             if (document.visibilityState === 'visible') {
                 this.loadData();
             }
-        }, 30000); // Atualizar a cada 30 segundos
+        }, 30000);
     }
 };
+
 // ============================================
-// MÓDULO DE PRODUTOS (ATUALIZADO COM PERFIL)
+// MÓDULO DE PRODUTOS
 // ============================================
 const Produtos = {
     paginaAtual: 1,
@@ -670,7 +604,6 @@ const Produtos = {
     verificarPermissoes() {
         this.isAdmin = Auth.isAdmin();
         
-        // Esconder botão de novo produto para funcionário
         const btnNovo = document.getElementById('btnNovoProduto');
         if (btnNovo) {
             btnNovo.style.display = this.isAdmin ? 'flex' : 'none';
@@ -678,7 +611,6 @@ const Produtos = {
     },
     
     setupEventListeners() {
-        // Botão novo produto (só admin)
         const btnNovo = document.getElementById('btnNovoProduto');
         if (btnNovo && this.isAdmin) {
             btnNovo.addEventListener('click', () => {
@@ -686,7 +618,6 @@ const Produtos = {
             });
         }
         
-        // Busca (todos podem)
         const buscaInput = document.getElementById('buscaProduto');
         if (buscaInput) {
             buscaInput.addEventListener('input', 
@@ -698,7 +629,6 @@ const Produtos = {
             );
         }
         
-        // Filtro categoria (todos podem)
         const filtroCategoria = document.getElementById('filtroCategoria');
         if (filtroCategoria) {
             filtroCategoria.addEventListener('change', (e) => {
@@ -708,7 +638,6 @@ const Produtos = {
             });
         }
         
-        // Formulário (só admin)
         const formProduto = document.getElementById('formProduto');
         if (formProduto && this.isAdmin) {
             formProduto.addEventListener('submit', (e) => {
@@ -717,7 +646,6 @@ const Produtos = {
             });
         }
         
-        // Fechar modal
         const closeBtn = document.querySelector('#modalProduto .close');
         if (closeBtn) {
             closeBtn.addEventListener('click', () => {
@@ -725,7 +653,6 @@ const Produtos = {
             });
         }
 
-        // Fechar modal clicando fora
         window.addEventListener('click', (e) => {
             const modal = document.getElementById('modalProduto');
             if (e.target === modal) {
@@ -738,14 +665,12 @@ const Produtos = {
         try {
             const categorias = await API.listarCategorias();
             
-            // Preencher select de filtro
             const filtroSelect = document.getElementById('filtroCategoria');
             if (filtroSelect) {
                 filtroSelect.innerHTML = '<option value="todas">Todas categorias</option>' +
                     categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
             }
             
-            // Preencher select do modal (só se for admin)
             const modalSelect = document.getElementById('produtoCategoria');
             if (modalSelect && this.isAdmin) {
                 modalSelect.innerHTML = '<option value="">Selecione uma categoria</option>' +
@@ -812,51 +737,55 @@ const Produtos = {
         }
     },
     
-    renderizar() {
-        const tbody = document.getElementById('produtosTable');
-        if (!tbody) return;
+renderizar() {
+    const tbody = document.getElementById('produtosTable');
+    if (!tbody) return;
+    
+    if (this.produtos.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" style="text-align: center; padding: 50px;">
+                    <div style="font-size: 48px; margin-bottom: 20px;">📦</div>
+                    <h3>Nenhum produto encontrado</h3>
+                    <p style="color: var(--text-muted); margin-top: 10px;">
+                        ${this.isAdmin ? 'Clique em "Novo Produto" para começar' : 'Nenhum produto cadastrado'}
+                    </p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = this.produtos.map(p => {
+        // Verificar se é admin para mostrar preço de custo
+        const precoCustoDisplay = this.isAdmin ? UI.formatCurrency(p.preco_custo) : '---';
         
-        if (this.produtos.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="7" style="text-align: center; padding: 50px;">
-                        <div style="font-size: 48px; margin-bottom: 20px;">📦</div>
-                        <h3>Nenhum produto encontrado</h3>
-                        <p style="color: var(--text-muted); margin-top: 10px;">
-                            ${this.isAdmin ? 'Clique em "Novo Produto" para começar' : 'Nenhum produto cadastrado'}
-                        </p>
-                    </td>
-                </tr>
-            `;
-            return;
-        }
+        // Verificar se é admin para mostrar botões de ação
+        const acoesDisplay = this.isAdmin ? `
+            <div style="display: flex; gap: 5px;">
+                <button class="btn btn-primary btn-sm" onclick="Produtos.editar(${p.id})" title="Editar">✏️</button>
+                <button class="btn btn-warning btn-sm" onclick="Produtos.abrirModalEstoque(${p.id})" title="Ajustar Estoque">📦</button>
+                <button class="btn btn-danger btn-sm" onclick="Produtos.excluir(${p.id})" title="Excluir">🗑️</button>
+            </div>
+        ` : '<span class="badge badge-info">Apenas visualização</span>';
         
-        tbody.innerHTML = this.produtos.map(p => `
+        return `
             <tr>
                 <td><strong>${p.nome || '-'}</strong></td>
                 <td>${p.categoria_nome || '-'}</td>
                 <td>${p.tipo_nome || '-'}</td>
-                <td>${this.isAdmin ? UI.formatCurrency(p.preco_custo) : '---'}</td>
+                <td>${precoCustoDisplay}</td>
                 <td>${UI.formatCurrency(p.preco_venda)}</td>
                 <td>
                     <span class="badge ${(p.quantidade || 0) < 5 ? 'badge-warning' : 'badge-success'}">
                         ${p.quantidade || 0}
                     </span>
                 </td>
-                <td>
-                    ${this.isAdmin ? `
-                        <div style="display: flex; gap: 5px;">
-                            <button class="btn btn-primary btn-sm" onclick="Produtos.editar(${p.id})" title="Editar">✏️</button>
-                            <button class="btn btn-warning btn-sm" onclick="Produtos.abrirModalEstoque(${p.id})" title="Ajustar Estoque">📦</button>
-                            <button class="btn btn-danger btn-sm" onclick="Produtos.excluir(${p.id})" title="Excluir">🗑️</button>
-                        </div>
-                    ` : `
-                        <span class="badge badge-info">Apenas visualização</span>
-                    `}
-                </td>
+                <td>${acoesDisplay}</td>
             </tr>
-        `).join('');
-    },
+        `;
+    }).join('');
+},
     
     renderizarPaginacao() {
         const container = document.getElementById('paginacao');
@@ -868,29 +797,19 @@ const Produtos = {
         }
         
         let html = '';
-        
-        // Botão anterior
         html += `<button onclick="Produtos.irParaPagina(${this.paginaAtual - 1})" 
                  ${this.paginaAtual === 1 ? 'disabled' : ''}>◀</button>`;
         
-        // Páginas
         for (let i = 1; i <= this.totalPaginas; i++) {
-            if (
-                i === 1 ||
-                i === this.totalPaginas ||
-                (i >= this.paginaAtual - 2 && i <= this.paginaAtual + 2)
-            ) {
+            if (i === 1 || i === this.totalPaginas || 
+                (i >= this.paginaAtual - 2 && i <= this.paginaAtual + 2)) {
                 html += `<button class="${i === this.paginaAtual ? 'active' : ''}" 
                          onclick="Produtos.irParaPagina(${i})">${i}</button>`;
-            } else if (
-                i === this.paginaAtual - 3 ||
-                i === this.paginaAtual + 3
-            ) {
+            } else if (i === this.paginaAtual - 3 || i === this.paginaAtual + 3) {
                 html += `<button disabled>...</button>`;
             }
         }
         
-        // Botão próximo
         html += `<button onclick="Produtos.irParaPagina(${this.paginaAtual + 1})"
                  ${this.paginaAtual === this.totalPaginas ? 'disabled' : ''}>▶</button>`;
         
@@ -930,7 +849,6 @@ const Produtos = {
             document.getElementById('formProduto').reset();
         }
         
-        // Carregar tipos se já tiver categoria selecionada
         if (produto?.categoria_id) {
             this.carregarTipos(produto.categoria_id).then(() => {
                 if (produto.tipo_id) {
@@ -965,12 +883,9 @@ const Produtos = {
                 quantidade: parseInt(document.getElementById('produtoQuantidade')?.value) || 0
             };
             
-            // Validações
             if (!produto.nome) throw new Error('Nome é obrigatório');
             if (!produto.categoria_id) throw new Error('Categoria é obrigatória');
             if (!produto.tipo_id) throw new Error('Tipo é obrigatório');
-            if (produto.preco_custo < 0) throw new Error('Preço de custo inválido');
-            if (produto.preco_venda < 0) throw new Error('Preço de venda inválido');
             
             if (this.produtoEditando) {
                 await API.atualizarProduto(this.produtoEditando.id, produto);
@@ -1076,7 +991,6 @@ const Vendas = {
     },
     
     setupEventListeners() {
-        // Busca de produtos
         const buscaInput = document.getElementById('buscaProduto');
         if (buscaInput) {
             buscaInput.addEventListener('input', 
@@ -1086,7 +1000,6 @@ const Vendas = {
             );
         }
         
-        // Forma de pagamento
         const pagamentoSelect = document.getElementById('formaPagamento');
         if (pagamentoSelect) {
             pagamentoSelect.addEventListener('change', (e) => {
@@ -1094,7 +1007,6 @@ const Vendas = {
             });
         }
         
-        // Finalizar venda
         const btnFinalizar = document.getElementById('btnFinalizarVenda');
         if (btnFinalizar) {
             btnFinalizar.addEventListener('click', () => {
@@ -1102,7 +1014,6 @@ const Vendas = {
             });
         }
         
-        // Limpar carrinho
         const btnLimpar = document.getElementById('btnLimparCarrinho');
         if (btnLimpar) {
             btnLimpar.addEventListener('click', () => {
@@ -1179,7 +1090,6 @@ const Vendas = {
             return;
         }
         
-        // Adicionar múltiplos com Shift
         if (window.event?.shiftKey) {
             const quantidade = prompt(`Quantidade de ${produto.nome}:`, '1');
             if (quantidade) {
@@ -1191,7 +1101,6 @@ const Vendas = {
             return;
         }
         
-        // Adicionar 1 normalmente
         const itemExistente = this.carrinho.find(item => item.produto_id === produtoId);
         
         if (itemExistente) {
@@ -1213,7 +1122,6 @@ const Vendas = {
         
         this.atualizarCarrinho();
         
-        // Feedback visual
         const card = window.event?.target?.closest('.produto-card');
         if (card) {
             card.style.transform = 'scale(0.95)';
@@ -1380,7 +1288,8 @@ const Vendas = {
                     produto_id: item.produto_id,
                     quantidade: item.quantidade
                 })),
-                forma_pagamento: formaPagamento
+                forma_pagamento: formaPagamento,
+                observacao: ''
             };
             
             const result = await API.criarVenda(venda);
@@ -1390,12 +1299,10 @@ const Vendas = {
                 'success'
             );
             
-            // Limpar carrinho e recarregar
             this.carrinho = [];
             this.atualizarCarrinho();
             await this.carregarProdutos();
             
-            // Resetar forma de pagamento
             const pagamentoSelect = document.getElementById('formaPagamento');
             if (pagamentoSelect) pagamentoSelect.value = '';
             this.formaPagamento = '';
@@ -1418,7 +1325,6 @@ const CategoriasManager = {
     async init() {
         await Auth.checkAuth();
         
-        // Verificar se é admin
         if (!Auth.isAdmin()) {
             window.location.href = '/dashboard.html';
             return;
@@ -1430,7 +1336,6 @@ const CategoriasManager = {
     },
     
     setupEventListeners() {
-        // Filtro de tipos
         const filtro = document.getElementById('filtroTipoCategoria');
         if (filtro) {
             filtro.addEventListener('change', () => {
@@ -1438,7 +1343,6 @@ const CategoriasManager = {
             });
         }
         
-        // Formulários
         const formCategoria = document.getElementById('formCategoria');
         if (formCategoria) {
             formCategoria.addEventListener('submit', (e) => {
@@ -1455,7 +1359,6 @@ const CategoriasManager = {
             });
         }
         
-        // Botões de fechar modal
         document.querySelectorAll('.close').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
@@ -1753,7 +1656,6 @@ const Relatorios = {
     async init() {
         await Auth.checkAuth();
         
-        // Verificar se é admin
         if (!Auth.isAdmin()) {
             window.location.href = '/dashboard.html';
             return;
@@ -1776,32 +1678,16 @@ const Relatorios = {
         try {
             UI.showLoading();
             
-            // Mostrar loading nos cards
             document.getElementById('produtoMaisVendido').innerHTML = '<p>Carregando...</p>';
             document.getElementById('categoriaMaisVendida').innerHTML = '<p>Carregando...</p>';
             
             const [lucroDiario, lucroMensal, produtoMaisVendido, categoriaMaisVendida, vendasPeriodo] = 
                 await Promise.all([
-                    API.lucroDiario().catch(e => {
-                        console.error('Erro lucro diario:', e);
-                        return { total_lucro: 0 };
-                    }),
-                    API.lucroMensal().catch(e => {
-                        console.error('Erro lucro mensal:', e);
-                        return { total_lucro: 0 };
-                    }),
-                    API.produtoMaisVendido().catch(e => {
-                        console.error('Erro produto mais vendido:', e);
-                        return null;
-                    }),
-                    API.categoriaMaisVendida().catch(e => {
-                        console.error('Erro categoria mais vendida:', e);
-                        return null;
-                    }),
-                    API.vendasPorPeriodo(periodo).catch(e => {
-                        console.error('Erro vendas por periodo:', e);
-                        return [];
-                    })
+                    API.lucroDiario().catch(() => ({ total_lucro: 0 })),
+                    API.lucroMensal().catch(() => ({ total_lucro: 0 })),
+                    API.produtoMaisVendido().catch(() => null),
+                    API.categoriaMaisVendida().catch(() => null),
+                    API.vendasPorPeriodo(periodo).catch(() => [])
                 ]);
             
             this.atualizarCards(lucroDiario, lucroMensal);
@@ -1837,9 +1723,8 @@ const Relatorios = {
         if (produtoEl) {
             if (produto && produto.nome) {
                 produtoEl.innerHTML = `
-                    <h4 style="margin-bottom: 10px; color: var(--green);">🥇 ${produto.nome}</h4>
+                    <h4 style="margin-bottom: 10px; color: var(--accent-primary);">🥇 ${produto.nome}</h4>
                     <p>Vendas: <strong>${produto.total_vendido || 0}</strong> unidades</p>
-                    <p>Número de vendas: <strong>${produto.numero_vendas || 0}</strong></p>
                 `;
             } else {
                 produtoEl.innerHTML = '<p style="color: var(--text-muted);">Nenhuma venda registrada</p>';
@@ -1849,8 +1734,7 @@ const Relatorios = {
         if (categoriaEl) {
             if (categoria && categoria.categoria) {
                 categoriaEl.innerHTML = `
-                    <h4 style="margin-bottom: 10px; color: var(--orange);">🏆 ${categoria.categoria}</h4>
-                    <p>Vendas: <strong>${categoria.total_vendido || 0}</strong> unidades</p>
+                    <h4 style="margin-bottom: 10px; color: var(--accent-primary);">🏆 ${categoria.categoria}</h4>
                     <p>Faturamento: <strong>${UI.formatCurrency(categoria.valor_total || 0)}</strong></p>
                 `;
             } else {
@@ -1866,8 +1750,8 @@ const Relatorios = {
         if (!vendas || vendas.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="4" style="text-align: center; padding: 30px; color: var(--text-muted);">
-                        Nenhuma venda encontrada no período
+                    <td colspan="4" style="text-align: center; padding: 30px;">
+                        Nenhuma venda encontrada
                     </td>
                 </tr>
             `;
@@ -1908,13 +1792,13 @@ const Relatorios = {
                     {
                         label: 'Vendas (R$)',
                         data: vendas.map(v => v.total_vendas || 0),
-                        backgroundColor: '#00c853',
+                        backgroundColor: '#c4a747',
                         borderRadius: 4
                     },
                     {
                         label: 'Lucro (R$)',
                         data: vendas.map(v => v.total_lucro || 0),
-                        backgroundColor: '#ff9800',
+                        backgroundColor: '#b91c3c',
                         borderRadius: 4
                     }
                 ]
@@ -1924,35 +1808,20 @@ const Relatorios = {
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        labels: {
-                            color: '#b8c0cc'
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: (context) => {
-                                return `${context.dataset.label}: ${UI.formatCurrency(context.raw)}`;
-                            }
-                        }
+                        labels: { color: '#94a3b8' }
                     }
                 },
                 scales: {
                     y: {
-                        grid: {
-                            color: '#363b47'
-                        },
+                        grid: { color: '#2d3540' },
                         ticks: {
-                            color: '#b8c0cc',
-                            callback: (value) => UI.formatCurrency(value)
+                            color: '#94a3b8',
+                            callback: (value) => 'R$ ' + value
                         }
                     },
                     x: {
-                        grid: {
-                            display: false
-                        },
-                        ticks: {
-                            color: '#b8c0cc'
-                        }
+                        grid: { display: false },
+                        ticks: { color: '#94a3b8' }
                     }
                 }
             }

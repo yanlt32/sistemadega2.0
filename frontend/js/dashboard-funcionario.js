@@ -7,13 +7,24 @@ const DashboardFuncionario = {
     async init() {
         await Auth.checkAuth();
         
-        // Verificar se é funcionário
+        // Verificar se é funcionário (mas não redirecionar se for admin)
         const user = Auth.getCurrentUser();
-        if (!user || user.role !== 'funcionario') {
-            window.location.href = '/dashboard.html';
+        if (!user) {
+            window.location.href = '/';
             return;
         }
         
+        // Se for admin, carrega o dashboard admin em vez deste
+        if (user.role === 'admin') {
+            if (window.DashboardAdmin) {
+                window.DashboardAdmin.init();
+            } else {
+                window.Dashboard.init();
+            }
+            return;
+        }
+        
+        // Se chegou aqui, é funcionário - carrega o dashboard
         await this.carregarDados();
         this.configurarAtualizacao();
     },
@@ -39,6 +50,9 @@ const DashboardFuncionario = {
             
         } catch (error) {
             console.error('Erro ao carregar dashboard:', error);
+            if (window.Notificacao) {
+                Notificacao.mostrar('Erro ao carregar dados', 'danger');
+            }
         } finally {
             UI.hideLoading();
         }
@@ -54,35 +68,45 @@ const DashboardFuncionario = {
         }
     },
     
+    async buscarTotalProdutos() {
+        try {
+            const response = await API.listarProdutos({ limit: 1 });
+            // Não temos um endpoint específico para total, então vamos calcular
+            const allProducts = await API.listarProdutos({ limit: 1000 });
+            const total = allProducts.produtos?.reduce((acc, p) => acc + (p.quantidade || 0), 0) || 0;
+            return total;
+        } catch (error) {
+            console.error('Erro ao buscar total de produtos:', error);
+            return 0;
+        }
+    },
+    
     atualizarCards() {
-        // Cards básicos que funcionário pode ver
-        const elementos = {
-            totalVendasHoje: document.getElementById('totalVendasHoje'),
-            produtosEmEstoque: document.getElementById('produtosEmEstoque'),
-            vendasHoje: document.getElementById('vendasHoje')
-        };
-        
         // Calcular vendas de hoje
         const hoje = new Date().toDateString();
         const vendasHoje = this.data.ultimasVendas.filter(v => 
             new Date(v.data_venda).toDateString() === hoje
         );
         
-        if (elementos.vendasHoje) {
-            elementos.vendasHoje.textContent = vendasHoje.length;
+        const vendasHojeElement = document.getElementById('vendasHoje');
+        if (vendasHojeElement) {
+            vendasHojeElement.textContent = vendasHoje.length;
         }
         
-        if (elementos.produtosEmEstoque) {
-            // Esse valor viria de uma API específica
-            elementos.produtosEmEstoque.textContent = '...';
-        }
+        // Buscar total de produtos em estoque
+        this.buscarTotalProdutos().then(total => {
+            const produtosElement = document.getElementById('produtosEmEstoque');
+            if (produtosElement) {
+                produtosElement.textContent = total;
+            }
+        });
     },
     
     mostrarEstoqueBaixo() {
         const container = document.getElementById('estoqueBaixoLista');
         if (!container) return;
         
-        if (!this.data.estoqueBaixo?.length) {
+        if (!this.data.estoqueBaixo || this.data.estoqueBaixo.length === 0) {
             container.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 15px;">✅ Todos os produtos estão com estoque adequado</div>';
             return;
         }
@@ -100,10 +124,10 @@ const DashboardFuncionario = {
     },
     
     mostrarUltimasVendas() {
-        const tbody = document.getElementById('ultimasVendasTable')?.querySelector('tbody');
+        const tbody = document.querySelector('#ultimasVendasTable tbody');
         if (!tbody) return;
         
-        if (!this.data.ultimasVendas.length) {
+        if (!this.data.ultimasVendas || this.data.ultimasVendas.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Nenhuma venda recente</td></tr>';
             return;
         }
@@ -113,7 +137,7 @@ const DashboardFuncionario = {
                 <td>#${v.id}</td>
                 <td>${new Date(v.data_venda).toLocaleString('pt-BR')}</td>
                 <td>${UI.formatCurrency(v.total)}</td>
-                <td><span class="badge badge-success">${v.forma_pagamento}</span></td>
+                <td><span class="badge badge-success">${v.forma_pagamento || 'N/A'}</span></td>
             </tr>
         `).join('');
     },
@@ -131,10 +155,6 @@ const DashboardFuncionario = {
 // Inicializar quando a página carregar
 document.addEventListener('DOMContentLoaded', () => {
     if (window.location.pathname.includes('dashboard.html')) {
-        // Verificar perfil e carregar dashboard apropriado
-        const user = Auth.getCurrentUser();
-        if (user && user.role === 'funcionario') {
-            DashboardFuncionario.init();
-        }
+        DashboardFuncionario.init();
     }
 });

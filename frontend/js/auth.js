@@ -75,6 +75,7 @@ const Auth = {
                 return false;
             }
         } catch (error) {
+            console.error('Erro ao verificar autenticação:', error);
             return false;
         }
     },
@@ -92,6 +93,7 @@ const Auth = {
             if (el) {
                 const role = user?.role || 'funcionario';
                 el.textContent = role === 'admin' ? 'Admin' : 'Funcionário';
+                el.className = `badge ${role === 'admin' ? 'badge-success' : 'badge-info'}`;
             }
         });
     },
@@ -102,12 +104,30 @@ const Auth = {
         
         menuItems.forEach(item => {
             const text = item.textContent || '';
-            if (text.includes('Relatórios') || text.includes('Categorias')) {
-                item.style.display = isAdmin ? 'flex' : 'none';
+            
+            // Se for funcionário, esconder itens de admin
+            if (!isAdmin) {
+                if (text.includes('Dashboard') || 
+                    text.includes('Categorias') || 
+                    text.includes('Relatórios') || 
+                    text.includes('Gastos') || 
+                    text.includes('Financeiro')) {
+                    item.style.display = 'none';
+                }
             }
-            if (text.includes('Caixa')) {
+            
+            // Itens que todos podem ver
+            if (text.includes('Produtos') || 
+                text.includes('Vendas') || 
+                text.includes('Histórico')) {
                 item.style.display = 'flex';
             }
         });
+
+        // Esconder botões de ação para funcionário em produtos
+        if (!isAdmin && window.location.pathname.includes('produtos.html')) {
+            const btnNovo = document.getElementById('btnNovoProduto');
+            if (btnNovo) btnNovo.style.display = 'none';
+        }
     }
-};
+}; // <-- FECHA O OBJETO AQUI!
