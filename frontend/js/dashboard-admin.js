@@ -1,5 +1,5 @@
 // ============================================
-// DASHBOARD ADMIN - VERSÃO CORRIGIDA
+// DASHBOARD ADMIN - VERSÃO COMPLETA E CORRIGIDA
 // ============================================
 const DashboardAdmin = {
     charts: {},
@@ -23,12 +23,12 @@ const DashboardAdmin = {
         try {
             UI.showLoading();
             
-            const [lucroDiario, lucroMensal, estoqueBaixo, vendasPeriodo, produtoMaisVendido, ultimasVendas] = await Promise.all([
+            const [lucroDiario, lucroMensal, estoqueBaixo, vendasPeriodo, produtosMaisVendidos, ultimasVendas] = await Promise.all([
                 API.lucroDiario().catch(() => ({ total_vendas: 0, total_lucro: 0, quantidade_vendas: 0 })),
                 API.lucroMensal().catch(() => ({ total_vendas: 0, total_lucro: 0 })),
                 API.estoqueBaixo().catch(() => []),
                 API.vendasPorPeriodo('dia').catch(() => []),
-                API.produtoMaisVendido().catch(() => null),
+                this.buscarProdutosMaisVendidos(),
                 API.listarVendas({ limite: 10 }).catch(() => ({ vendas: [] }))
             ]);
             
@@ -39,20 +39,65 @@ const DashboardAdmin = {
                 lucroMensal,
                 estoqueBaixo,
                 vendasPeriodo: vendasUltimos7Dias,
-                produtoMaisVendido,
+                produtosMaisVendidos: produtosMaisVendidos || [],
                 ultimasVendas: ultimasVendas.vendas || []
             };
             
             this.atualizarCards();
             this.atualizarGraficos();
             this.mostrarEstoqueBaixo();
-            this.mostrarProdutoMaisVendido();
+            this.mostrarProdutosMaisVendidos();
             this.mostrarUltimasVendas();
             
         } catch (error) {
             console.error('Erro ao carregar dashboard:', error);
+            if (window.Notificacao) {
+                Notificacao.mostrar('Erro ao carregar dados', 'danger');
+            }
         } finally {
             UI.hideLoading();
+        }
+    },
+    
+    async buscarProdutosMaisVendidos() {
+        try {
+            // Buscar vendas dos últimos 30 dias
+            const response = await API.listarVendas({ limite: 100 });
+            const vendas = response.vendas || [];
+            
+            // Mapa para contar produtos
+            const produtosMap = new Map();
+            
+            // Para cada venda, buscar detalhes
+            for (const venda of vendas) {
+                try {
+                    const detalhes = await API.buscarVenda(venda.id);
+                    if (detalhes.itens) {
+                        detalhes.itens.forEach(item => {
+                            const key = item.produto_id;
+                            if (!produtosMap.has(key)) {
+                                produtosMap.set(key, {
+                                    id: key,
+                                    nome: item.produto_nome || 'Produto',
+                                    quantidade: 0
+                                });
+                            }
+                            produtosMap.get(key).quantidade += item.quantidade || 0;
+                        });
+                    }
+                } catch (e) {
+                    console.log('Erro ao buscar detalhes da venda', venda.id);
+                }
+            }
+            
+            // Converter para array, ordenar e pegar top 5
+            return Array.from(produtosMap.values())
+                .sort((a, b) => b.quantidade - a.quantidade)
+                .slice(0, 5);
+                
+        } catch (error) {
+            console.error('Erro ao buscar produtos mais vendidos:', error);
+            return [];
         }
     },
     
@@ -136,12 +181,7 @@ const DashboardAdmin = {
         // Gráfico de Vendas por Dia
         const ctxVendas = document.getElementById('graficoVendasSemana');
         if (ctxVendas) {
-            // Limpar o canvas
-            const canvas = ctxVendas;
-            canvas.width = canvas.clientWidth;
-            canvas.height = canvas.clientHeight;
-            
-            this.charts.vendas = new Chart(canvas, {
+            this.charts.vendas = new Chart(ctxVendas, {
                 type: 'line',
                 data: {
                     labels: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'],
@@ -156,8 +196,7 @@ const DashboardAdmin = {
                         pointBackgroundColor: '#c4a747',
                         pointBorderColor: '#fff',
                         pointBorderWidth: 2,
-                        pointRadius: 5,
-                        pointHoverRadius: 7
+                        pointRadius: 4
                     }]
                 },
                 options: {
@@ -176,7 +215,7 @@ const DashboardAdmin = {
                             grid: { color: '#2d3540' },
                             ticks: {
                                 color: '#94a3b8',
-                                callback: (value) => 'R$ ' + value.toFixed(0)
+                                callback: (value) => 'R$ ' + value
                             }
                         },
                         x: {
@@ -191,30 +230,43 @@ const DashboardAdmin = {
         // Gráfico de Produtos Mais Vendidos
         const ctxProdutos = document.getElementById('graficoProdutos');
         if (ctxProdutos) {
-            const canvas = ctxProdutos;
-            canvas.width = canvas.clientWidth;
-            canvas.height = canvas.clientHeight;
-            
-            this.charts.produtos = new Chart(canvas, {
-                type: 'doughnut',
+            this.charts.produtos = new Chart(ctxProdutos, {
+                type: 'bar',
                 data: {
-                    labels: ['Carregando...'],
+                    labels: [],
                     datasets: [{
-                        data: [1],
-                        backgroundColor: ['#c4a747'],
-                        borderWidth: 0
+                        label: 'Quantidade Vendida',
+                        data: [],
+                        backgroundColor: '#c4a747',
+                        borderRadius: 6
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    cutout: '65%',
                     plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: { 
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => `${context.raw} unidades`
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: '#2d3540' },
+                            ticks: {
                                 color: '#94a3b8',
-                                font: { size: 12 }
+                                stepSize: 1
+                            }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { 
+                                color: '#94a3b8',
+                                maxRotation: 45,
+                                minRotation: 45
                             }
                         }
                     }
@@ -224,22 +276,19 @@ const DashboardAdmin = {
     },
     
     atualizarGraficos() {
+        // Atualizar gráfico de vendas
         if (this.charts.vendas && this.data.vendasPeriodo.length > 0) {
             this.charts.vendas.data.datasets[0].data = this.data.vendasPeriodo.map(d => d.total);
             this.charts.vendas.update();
         }
         
-        if (this.charts.produtos && this.data.produtoMaisVendido) {
-            const produto = this.data.produtoMaisVendido;
-            if (produto && produto.nome) {
-                this.charts.produtos.data.labels = [produto.nome, 'Outros'];
-                this.charts.produtos.data.datasets[0].data = [
-                    produto.total_vendido || 1,
-                    Math.max(1, (produto.total_vendido || 1) * 0.3)
-                ];
-                this.charts.produtos.data.datasets[0].backgroundColor = ['#c4a747', '#2d3540'];
-                this.charts.produtos.update();
-            }
+        // Atualizar gráfico de produtos mais vendidos
+        if (this.charts.produtos && this.data.produtosMaisVendidos.length > 0) {
+            this.charts.produtos.data.labels = this.data.produtosMaisVendidos.map(p => 
+                p.nome.length > 10 ? p.nome.substring(0, 10) + '...' : p.nome
+            );
+            this.charts.produtos.data.datasets[0].data = this.data.produtosMaisVendidos.map(p => p.quantidade);
+            this.charts.produtos.update();
         }
     },
     
@@ -270,17 +319,23 @@ const DashboardAdmin = {
         `).join('');
     },
     
-    mostrarProdutoMaisVendido() {
+    mostrarProdutosMaisVendidos() {
         const container = document.getElementById('produtoMaisVendido');
         if (!container) return;
         
-        if (this.data.produtoMaisVendido && this.data.produtoMaisVendido.nome) {
-            const produto = this.data.produtoMaisVendido;
+        if (this.data.produtosMaisVendidos && this.data.produtosMaisVendidos.length > 0) {
+            const top3 = this.data.produtosMaisVendidos.slice(0, 3);
             container.innerHTML = `
-                <div style="text-align: center; padding: 20px;">
-                    <div style="font-size: 48px; margin-bottom: 10px;">🏆</div>
-                    <h4 style="color: var(--accent-primary); margin-bottom: 5px; font-size: 18px;">${produto.nome}</h4>
-                    <p style="color: var(--text-muted);">${produto.total_vendido || 0} unidades vendidas</p>
+                <div style="padding: 10px;">
+                    ${top3.map((p, index) => `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: ${index < top3.length-1 ? '1px solid var(--border-color)' : 'none'};">
+                            <div>
+                                <span style="color: var(--accent-primary); font-weight: bold; margin-right: 8px;">${index+1}º</span>
+                                <strong style="color: var(--text-primary);">${p.nome}</strong>
+                            </div>
+                            <span style="color: var(--text-muted); background: var(--bg-tertiary); padding: 4px 8px; border-radius: 12px;">${p.quantidade} vendidos</span>
+                        </div>
+                    `).join('')}
                 </div>
             `;
         } else {
@@ -319,3 +374,10 @@ const DashboardAdmin = {
         }, 30000);
     }
 };
+
+// Inicializar quando a página carregar
+document.addEventListener('DOMContentLoaded', () => {
+    if (window.location.pathname.includes('dashboard.html')) {
+        DashboardAdmin.init();
+    }
+});
