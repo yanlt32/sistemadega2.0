@@ -8,7 +8,6 @@ const vendaController = {
 
         console.log('Recebendo venda:', { itens, forma_pagamento, usuario_id });
 
-        // Validações
         if (!itens || itens.length === 0) {
             return res.status(400).json({ error: 'Selecione pelo menos um produto' });
         }
@@ -21,7 +20,6 @@ const vendaController = {
         let lucro = 0;
         let erros = [];
 
-        // Buscar produtos para verificar estoque e calcular totais
         const produtosPromises = itens.map(item => {
             return new Promise((resolve, reject) => {
                 db.get('SELECT * FROM produtos WHERE id = ?', [item.produto_id], (err, produto) => {
@@ -33,7 +31,6 @@ const vendaController = {
 
         Promise.all(produtosPromises)
             .then(resultados => {
-                // Verificar estoque e calcular totais
                 for (const { item, produto } of resultados) {
                     if (!produto) {
                         erros.push(`Produto ID ${item.produto_id} não encontrado`);
@@ -53,11 +50,10 @@ const vendaController = {
                     return res.status(400).json({ erros });
                 }
 
-                // Iniciar transação
                 db.serialize(() => {
                     db.run('BEGIN TRANSACTION');
 
-                    // Inserir venda - Usando apenas 'forma_pagamento' (texto)
+                    // Usando apenas forma_pagamento (texto simples)
                     db.run(
                         `INSERT INTO vendas (total, lucro, forma_pagamento, usuario_id, status, observacao) 
                          VALUES (?, ?, ?, ?, 'concluida', ?)`,
@@ -74,7 +70,6 @@ const vendaController = {
 
                             let itensInseridos = 0;
 
-                            // Inserir itens da venda
                             resultados.forEach(({ item, produto }) => {
                                 db.run(
                                     `INSERT INTO itens_venda (venda_id, produto_id, quantidade, preco_unitario, preco_custo_unitario) 
@@ -87,7 +82,6 @@ const vendaController = {
                                             return;
                                         }
 
-                                        // Atualizar estoque do produto
                                         db.run(
                                             'UPDATE produtos SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
                                             [item.quantidade, item.produto_id],
@@ -98,7 +92,6 @@ const vendaController = {
                                                     return;
                                                 }
 
-                                                // Registrar movimentação de estoque
                                                 db.run(
                                                     `INSERT INTO movimentacoes_estoque (produto_id, tipo, quantidade, observacao, usuario_id) 
                                                      VALUES (?, 'saida', ?, ?, ?)`,
@@ -107,11 +100,9 @@ const vendaController = {
 
                                                 itensInseridos++;
                                                 
-                                                // Finalizar transação quando todos os itens forem inseridos
                                                 if (itensInseridos === itens.length) {
                                                     db.run('COMMIT');
                                                     
-                                                    // Emitir eventos via WebSocket
                                                     if (req.io) {
                                                         req.io.emit('venda:realizada', { 
                                                             id: venda_id, 
@@ -119,8 +110,6 @@ const vendaController = {
                                                             lucro,
                                                             mensagem: `💰 Venda de R$ ${total.toFixed(2)} realizada!`
                                                         });
-                                                        
-                                                        req.io.emit('estoque:atualizado', {});
                                                     }
                                                     
                                                     res.json({ 
@@ -159,19 +148,10 @@ const vendaController = {
             WHERE 1=1
         `;
         let params = [];
-        let countParams = [];
 
-        // Filtro por data
         if (data_inicio && data_fim) {
             query += ' AND DATE(v.data_venda) BETWEEN DATE(?) AND DATE(?)';
             params.push(data_inicio, data_fim);
-        }
-
-        // Query para contar total de registros
-        let countQuery = 'SELECT COUNT(*) as total FROM vendas WHERE 1=1';
-        if (data_inicio && data_fim) {
-            countQuery += ' AND DATE(data_venda) BETWEEN DATE(?) AND DATE(?)';
-            countParams.push(data_inicio, data_fim);
         }
 
         query += ' ORDER BY v.data_venda DESC LIMIT ? OFFSET ?';
@@ -183,18 +163,10 @@ const vendaController = {
                 return res.status(500).json({ error: err.message });
             }
 
-            db.get(countQuery, countParams, (err, total) => {
-                if (err) {
-                    console.error('Erro ao contar vendas:', err);
-                    return res.status(500).json({ error: err.message });
-                }
-
-                res.json({
-                    vendas: vendas || [],
-                    total: total?.total || 0,
-                    pagina: parseInt(pagina),
-                    totalPaginas: Math.ceil((total?.total || 0) / limite)
-                });
+            res.json({
+                vendas: vendas || [],
+                pagina: parseInt(pagina),
+                total: vendas?.length || 0
             });
         });
     },
@@ -219,9 +191,8 @@ const vendaController = {
                     return res.status(404).json({ error: 'Venda não encontrada' });
                 }
 
-                // Buscar itens da venda
                 db.all(
-                    `SELECT iv.*, p.nome as produto_nome, p.preco_venda
+                    `SELECT iv.*, p.nome as produto_nome
                      FROM itens_venda iv
                      JOIN produtos p ON iv.produto_id = p.id
                      WHERE iv.venda_id = ?`,
@@ -240,51 +211,25 @@ const vendaController = {
         );
     },
 
-    // Atualizar venda (apenas observação e status)
-    atualizar: (req, res) => {
-        const { id } = req.params;
-        const { observacao, status } = req.body;
-
-        db.run(
-            'UPDATE vendas SET observacao = ?, status = ? WHERE id = ?',
-            [observacao, status, id],
-            function(err) {
-                if (err) {
-                    console.error('Erro ao atualizar venda:', err);
-                    return res.status(500).json({ error: err.message });
-                }
-
-                if (this.changes === 0) {
-                    return res.status(404).json({ error: 'Venda não encontrada' });
-                }
-
-                res.json({ message: 'Venda atualizada com sucesso' });
-            }
-        );
-    },
-
-    // Excluir venda (com restauração de estoque)
+    // Excluir venda
     excluir: (req, res) => {
         const { id } = req.params;
 
-        // Buscar itens da venda para restaurar estoque
         db.all('SELECT * FROM itens_venda WHERE venda_id = ?', [id], (err, itens) => {
             if (err) {
-                console.error('Erro ao buscar itens da venda:', err);
+                console.error('Erro ao buscar itens:', err);
                 return res.status(500).json({ error: err.message });
             }
 
             db.serialize(() => {
                 db.run('BEGIN TRANSACTION');
 
-                // Restaurar estoque de cada produto
                 itens.forEach(item => {
                     db.run(
                         'UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?',
                         [item.quantidade, item.produto_id]
                     );
 
-                    // Registrar movimentação de estoque (entrada por estorno)
                     db.run(
                         `INSERT INTO movimentacoes_estoque (produto_id, tipo, quantidade, observacao, usuario_id) 
                          VALUES (?, 'entrada', ?, ?, ?)`,
@@ -292,10 +237,7 @@ const vendaController = {
                     );
                 });
 
-                // Excluir itens da venda
                 db.run('DELETE FROM itens_venda WHERE venda_id = ?', [id]);
-
-                // Excluir venda
                 db.run('DELETE FROM vendas WHERE id = ?', [id], function(err) {
                     if (err) {
                         console.error('Erro ao excluir venda:', err);
@@ -304,78 +246,9 @@ const vendaController = {
                     }
 
                     db.run('COMMIT');
-                    
-                    // Emitir evento
-                    if (req.io) {
-                        req.io.emit('venda:excluida', { 
-                            id,
-                            mensagem: `🗑️ Venda #${id} excluída e estoque restaurado!`
-                        });
-                    }
-
-                    res.json({ 
-                        message: 'Venda excluída com sucesso', 
-                        itensRestaurados: itens.length 
-                    });
+                    res.json({ message: 'Venda excluída com sucesso' });
                 });
             });
-        });
-    },
-
-    // Cancelar venda (marcar como cancelada sem restaurar estoque)
-    cancelar: (req, res) => {
-        const { id } = req.params;
-        const { motivo } = req.body;
-
-        db.run(
-            "UPDATE vendas SET status = 'cancelada', observacao = ? WHERE id = ?",
-            [motivo || 'Venda cancelada', id],
-            function(err) {
-                if (err) {
-                    console.error('Erro ao cancelar venda:', err);
-                    return res.status(500).json({ error: err.message });
-                }
-
-                if (this.changes === 0) {
-                    return res.status(404).json({ error: 'Venda não encontrada' });
-                }
-
-                // Emitir evento
-                if (req.io) {
-                    req.io.emit('venda:cancelada', { 
-                        id,
-                        mensagem: `❌ Venda #${id} cancelada!`
-                    });
-                }
-
-                res.json({ message: 'Venda cancelada com sucesso' });
-            }
-        );
-    },
-
-    // Relatório de vendas por período
-    relatorio: (req, res) => {
-        const { data_inicio, data_fim } = req.query;
-
-        db.all(`
-            SELECT 
-                DATE(data_venda) as data,
-                COUNT(*) as quantidade,
-                SUM(total) as total,
-                SUM(lucro) as lucro,
-                GROUP_CONCAT(DISTINCT forma_pagamento) as formas_pagamento
-            FROM vendas
-            WHERE DATE(data_venda) BETWEEN DATE(?) AND DATE(?)
-            AND status = 'concluida'
-            GROUP BY DATE(data_venda)
-            ORDER BY data DESC
-        `, [data_inicio, data_fim], (err, results) => {
-            if (err) {
-                console.error('Erro ao gerar relatório:', err);
-                return res.status(500).json({ error: err.message });
-            }
-
-            res.json(results || []);
         });
     }
 };
