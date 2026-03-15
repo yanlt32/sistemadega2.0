@@ -16,6 +16,7 @@ const io = socketIo(server, {
 
 const PORT = process.env.PORT || 3000;
 
+// Configurar CORS
 app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -25,10 +26,12 @@ app.use(cors({
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../frontend')));
 
-console.log('🔄 Inicializando banco de dados...');
+// Inicializar banco de dados
+console.log('🚀 Inicializando banco de dados...');
 initializeDatabase();
 criarUsuariosPadrao();
 
+// Middleware para emitir eventos WebSocket
 app.use((req, res, next) => {
     req.io = io;
     next();
@@ -37,15 +40,11 @@ app.use((req, res, next) => {
 // Rotas da API
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/produtos', require('./routes/produtoRoutes'));
-app.use('/api/vendas', require('./routes/vendaRoutes'));
+app.use('/api/vendas', require('./routes/vendaRoutes')); // ← VERIFIQUE ESTA LINHA
 app.use('/api/relatorios', require('./routes/relatorioRoutes'));
 app.use('/api/categorias', require('./routes/categoriaRoutes'));
 app.use('/api/tipos', require('./routes/tipoRoutes'));
-app.use('/api/doses', require('./routes/doseRoutes'));
-app.use('/api/combos', require('./routes/comboRoutes'));
-app.use('/api/caixa', require('./routes/caixaRoutes'));
-app.use('/api/exportar', require('./routes/exportacaoRoutes')); // Verifique se esta linha existe
-app.use('/api/gastos', require('./routes/gastoRoutes'));
+app.use('/api/exportar', require('./routes/exportacaoRoutes'));
 
 // Rotas do frontend
 app.get('/', (req, res) => {
@@ -76,10 +75,6 @@ app.get('/relatorios.html', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/relatorios.html'));
 });
 
-app.get('/caixa.html', (req, res) => {
-    res.sendFile(path.join(__dirname, '../frontend/caixa.html'));
-});
-
 app.get('/gastos.html', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/gastos.html'));
 });
@@ -88,10 +83,12 @@ app.get('/financeiro.html', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/financeiro.html'));
 });
 
+// Rota de saúde
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// WebSocket connection
 io.on('connection', (socket) => {
     console.log('🟢 Cliente conectado:', socket.id);
     
@@ -100,6 +97,7 @@ io.on('connection', (socket) => {
     });
 });
 
+// Tratamento de erros
 app.use((err, req, res, next) => {
     console.error('❌ Erro:', err.stack);
     res.status(500).json({ error: 'Algo deu errado!' });

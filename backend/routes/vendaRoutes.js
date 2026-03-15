@@ -13,8 +13,6 @@ router.get('/', isFuncionario, vendaController.listar);
 router.get('/:id', isFuncionario, vendaController.buscarPorId);
 
 // Rotas que apenas admin pode acessar
-router.put('/:id', isAdmin, vendaController.atualizar);
 router.delete('/:id', isAdmin, vendaController.excluir);
-router.put('/:id/cancelar', isAdmin, vendaController.cancelar);
 
 module.exports = router;
