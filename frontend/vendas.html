@@ -1,141 +1,123 @@
 <!doctype html>
 <html lang="pt-BR">
-  <head>
+<head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vendas - Adega System</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes" />
+    <title>Vendas - PodPá</title>
     <link rel="stylesheet" href="/css/style.css" />
-  </head>
-  <body>
+</head>
+<body>
     <div class="dashboard-container">
-      <aside class="sidebar">
-        <div class="sidebar-header">
-          
-          <h3>PODPÁ</h3>
-        </div>
-        <ul class="sidebar-menu">
-          <li onclick="window.location.href = '/dashboard.html'">
-            <i>📊</i> <span>Dashboard</span>
-          </li>
-          <li onclick="window.location.href = '/produtos.html'">
-            <i>📦</i> <span>Produtos</span>
-          </li>
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h3>PODPÁ</h3>
+            </div>
+            <ul class="sidebar-menu">
+                <li onclick="window.location.href = '/dashboard.html'">
+                    <i>📊</i> <span>Dashboard</span>
+                </li>
+                <li onclick="window.location.href = '/produtos.html'">
+                    <i>📦</i> <span>Produtos</span>
+                </li>
+                <li class="active">
+                    <i>💰</i> <span>Vendas</span>
+                </li>
+                <li onclick="window.location.href = '/historico-vendas.html'">
+                    <i>📋</i> <span>Histórico</span>
+                </li>
+                <li onclick="window.location.href = '/categorias.html'">
+                    <i>🏷️</i> <span>Categorias</span>
+                </li>
+                <li onclick="window.location.href = '/relatorios.html'">
+                    <i>📈</i> <span>Relatórios</span>
+                </li>
+                <li onclick="window.location.href='/gastos.html'">
+                    <i>💸</i> <span>Gastos</span>
+                </li>
+                <li onclick="window.location.href='/financeiro.html'">
+                    <i>📊</i> <span>Financeiro</span>
+                </li>
+            </ul>
+        </aside>
 
-          </li>
-          <li class="active"><i>💰</i> <span>Vendas</span></li>
-                    <li onclick="window.location.href = '/categorias.html'">
-            <i>🏷️</i> <span>Categorias</span>
-          <li onclick="window.location.href = '/relatorios.html'">
-            <i>📈</i> <span>Relatórios</span>
-          </li>
-          <li onclick="window.location.href = '/historico-vendas.html'">
-            <i>📋</i> <span>Histórico</span>
-          </li>
-                          <li onclick="window.location.href='/gastos.html'">💸 <span>Gastos</span></li>
-                <li onclick="window.location.href='/financeiro.html'">📈 <span>Financeiro</span></li>
-        </ul>
-      </aside>
-
-      <main class="main-content">
-        <div class="top-bar">
-          <h1>Vendas</h1>
-          <div class="user-info">
-            <span id="userNome"></span>
-            <button class="logout-btn" id="logoutBtn">Sair</button>
-          </div>
-        </div>
-
-        <div class="cards-container">
-          <div class="card">
-            <h3>Carrinho</h3>
-            <div id="carrinhoItens" class="cart-container"></div>
-
-            <div class="cart-total">
-              <span>Total:</span>
-              <span id="carrinhoTotal">0,00</span>
+        <main class="main-content">
+            <div class="top-bar">
+                <h1>Vendas</h1>
+                <div class="user-info">
+                    <span id="userNome"></span>
+                    <span id="userRole" class="badge"></span>
+                    <button class="logout-btn" id="logoutBtn">Sair</button>
+                </div>
             </div>
 
-            <div class="cart-total">
-              <span>Lucro estimado:</span>
-              <span id="carrinhoLucro">0,00</span>
-            </div>
+            <div class="cards-container">
+                <!-- Card do Carrinho -->
+                <div class="card">
+                    <h3>Carrinho</h3>
+                    <div id="carrinhoItens" class="cart-container"></div>
 
-            <div style="margin-top: 20px">
-              <select id="formaPagamento" class="form-group">
-                <option value="">Selecione pagamento</option>
-                <option value="Dinheiro">Dinheiro</option>
-                <option value="Débito">Débito</option>
-                <option value="Crédito">Crédito</option>
-                <option value="Pix">Pix</option>
-              </select>
-            </div>
+                    <div class="cart-total">
+                        <span>Total:</span>
+                        <span id="carrinhoTotal">R$ 0,00</span>
+                    </div>
 
-            <div style="display: flex; gap: 10px; margin-top: 20px">
-              <button
-                class="btn btn-primary"
-                id="btnFinalizarVenda"
-                style="flex: 1"
-              >
-                Finalizar Venda
-              </button>
-              <button class="btn btn-danger" id="btnLimparCarrinho">
-                Limpar
-              </button>
-            </div>
-          </div>
+                    <div class="cart-total">
+                        <span>Lucro estimado:</span>
+                        <span id="carrinhoLucro">R$ 0,00</span>
+                    </div>
 
-          <div class="card" style="flex: 2">
-            <h3>Produtos</h3>
+                    <div style="margin-top: 20px">
+                        <label for="formaPagamento" style="display: block; margin-bottom: 8px; color: var(--text-secondary);">Forma de Pagamento</label>
+                        <select id="formaPagamento" class="form-group" required>
+                            <option value="">Selecione o pagamento</option>
+                            <option value="Dinheiro">💰 Dinheiro</option>
+                            <option value="Débito">💳 Débito</option>
+                            <option value="Crédito">💳 Crédito</option>
+                            <option value="Pix">📱 Pix</option>
+                        </select>
+                    </div>
 
-            <div class="search-bar">
-              <input
-                type="text"
-                id="buscaProduto"
-                placeholder="Buscar produtos..."
-              />
-            </div>
+                    <div class="cart-buttons">
+                        <button class="btn btn-primary btn-finalizar" id="btnFinalizarVenda">
+                            Finalizar Venda
+                        </button>
+                        <button class="btn btn-danger btn-limpar" id="btnLimparCarrinho">
+                            Limpar
+                        </button>
+                    </div>
+                </div>
 
-            <div
-              class="cards-container"
-              id="listaProdutos"
-              style="
-                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-              "
-            >
-              <!-- Produtos serão carregados aqui -->
+                <!-- Card de Produtos -->
+                <div class="card" style="flex: 2">
+                    <h3>Produtos</h3>
+
+                    <div class="search-bar">
+                        <input
+                            type="text"
+                            id="buscaProduto"
+                            placeholder="Buscar produtos... (Ctrl + K)"
+                        />
+                        <button class="btn btn-primary" id="btnLerCodigo" style="display: flex; align-items: center; gap: 5px; white-space: nowrap;">
+                            <span>📷</span> Ler Código
+                        </button>
+                    </div>
+
+                    <div class="produtos-grid" id="listaProdutos">
+                        <!-- Produtos serão carregados aqui -->
+                    </div>
+                </div>
             </div>
-          </div>
-        </div>
-      </main>
+        </main>
     </div>
 
-    <style>
-      .produto-card {
-        cursor: pointer;
-        transition: transform 0.2s;
-      }
-
-      .produto-card:hover {
-        transform: translateY(-2px);
-      }
-
-      .produto-card .preco {
-        font-size: 18px;
-        font-weight: bold;
-        color: var(--accent-primary);
-      }
-
-      .produto-card .estoque {
-        font-size: 12px;
-        color: var(--text-secondary);
-      }
-    </style>
-
+    <!-- Scripts -->
     <script src="/js/api.js"></script>
     <script src="/js/auth.js"></script>
     <script src="/js/app.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/realtime.js"></script>
+    <script src="/js/barcode-reader.js"></script>
+    
     <script>
     // Menu Hambúrguer para mobile
     document.addEventListener('DOMContentLoaded', function() {
@@ -178,6 +160,6 @@
             });
         });
     });
-</script>
-  </body>
+    </script>
+</body>
 </html>

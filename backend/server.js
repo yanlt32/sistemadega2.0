@@ -3,7 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const http = require('http');
 const socketIo = require('socket.io');
-const { initializeDatabase, criarUsuariosPadrao } = require('./models/database'); // ← Note o plural
+const { initializeDatabase, criarUsuariosPadrao } = require('./models/database');
 
 const app = express();
 const server = http.createServer(app);
@@ -16,7 +16,6 @@ const io = socketIo(server, {
 
 const PORT = process.env.PORT || 3000;
 
-// Configurar CORS
 app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -26,12 +25,10 @@ app.use(cors({
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../frontend')));
 
-// Inicializar banco de dados
 console.log('🔄 Inicializando banco de dados...');
 initializeDatabase();
-criarUsuariosPadrao(); // ← Corrigido aqui
+criarUsuariosPadrao();
 
-// Middleware para emitir eventos WebSocket
 app.use((req, res, next) => {
     req.io = io;
     next();
@@ -47,11 +44,10 @@ app.use('/api/tipos', require('./routes/tipoRoutes'));
 app.use('/api/doses', require('./routes/doseRoutes'));
 app.use('/api/combos', require('./routes/comboRoutes'));
 app.use('/api/caixa', require('./routes/caixaRoutes'));
-app.use('/api/exportar', require('./routes/exportacaoRoutes'));
-// Adicionar após as outras rotas
+app.use('/api/exportar', require('./routes/exportacaoRoutes')); // Verifique se esta linha existe
 app.use('/api/gastos', require('./routes/gastoRoutes'));
 
-// Rota para servir o frontend
+// Rotas do frontend
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
@@ -84,12 +80,18 @@ app.get('/caixa.html', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/caixa.html'));
 });
 
-// Rota de saúde
+app.get('/gastos.html', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/gastos.html'));
+});
+
+app.get('/financeiro.html', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/financeiro.html'));
+});
+
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// WebSocket connection
 io.on('connection', (socket) => {
     console.log('🟢 Cliente conectado:', socket.id);
     
@@ -98,7 +100,6 @@ io.on('connection', (socket) => {
     });
 });
 
-// Tratamento de erros
 app.use((err, req, res, next) => {
     console.error('❌ Erro:', err.stack);
     res.status(500).json({ error: 'Algo deu errado!' });

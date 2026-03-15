@@ -7,24 +7,15 @@ const DashboardFuncionario = {
     async init() {
         await Auth.checkAuth();
         
-        // Verificar se é funcionário (mas não redirecionar se for admin)
         const user = Auth.getCurrentUser();
         if (!user) {
             window.location.href = '/';
             return;
         }
         
-        // Se for admin, carrega o dashboard admin em vez deste
-        if (user.role === 'admin') {
-            if (window.DashboardAdmin) {
-                window.DashboardAdmin.init();
-            } else {
-                window.Dashboard.init();
-            }
-            return;
-        }
+        // Mostrar nome do usuário
+        document.getElementById('userNomeDisplay').textContent = user.nome || user.username || 'Funcionário';
         
-        // Se chegou aqui, é funcionário - carrega o dashboard
         await this.carregarDados();
         this.configurarAtualizacao();
     },
@@ -33,15 +24,17 @@ const DashboardFuncionario = {
         try {
             UI.showLoading();
             
-            // Carregar apenas dados que funcionário pode ver
-            const [estoqueBaixo, ultimasVendas] = await Promise.all([
+            // Carregar dados
+            const [estoqueBaixo, ultimasVendas, totalProdutos] = await Promise.all([
                 API.estoqueBaixo().catch(() => []),
-                this.buscarUltimasVendas()
+                this.buscarUltimasVendas(),
+                this.buscarTotalProdutos()
             ]);
             
             this.data = {
                 estoqueBaixo,
-                ultimasVendas: ultimasVendas || []
+                ultimasVendas: ultimasVendas || [],
+                totalProdutos
             };
             
             this.atualizarCards();
@@ -50,9 +43,6 @@ const DashboardFuncionario = {
             
         } catch (error) {
             console.error('Erro ao carregar dashboard:', error);
-            if (window.Notificacao) {
-                Notificacao.mostrar('Erro ao carregar dados', 'danger');
-            }
         } finally {
             UI.hideLoading();
         }
@@ -60,10 +50,10 @@ const DashboardFuncionario = {
     
     async buscarUltimasVendas() {
         try {
-            const response = await API.listarVendas({ limite: 5 });
+            const response = await API.listarVendas({ limite: 10 });
             return response.vendas || [];
         } catch (error) {
-            console.error('Erro ao buscar últimas vendas:', error);
+            console.error('Erro ao buscar vendas:', error);
             return [];
         }
     },
@@ -71,12 +61,9 @@ const DashboardFuncionario = {
     async buscarTotalProdutos() {
         try {
             const response = await API.listarProdutos({ limit: 1 });
-            // Não temos um endpoint específico para total, então vamos calcular
-            const allProducts = await API.listarProdutos({ limit: 1000 });
-            const total = allProducts.produtos?.reduce((acc, p) => acc + (p.quantidade || 0), 0) || 0;
-            return total;
+            // Estimar total (ou buscar endpoint específico)
+            return response.total || 0;
         } catch (error) {
-            console.error('Erro ao buscar total de produtos:', error);
             return 0;
         }
     },
@@ -88,18 +75,8 @@ const DashboardFuncionario = {
             new Date(v.data_venda).toDateString() === hoje
         );
         
-        const vendasHojeElement = document.getElementById('vendasHoje');
-        if (vendasHojeElement) {
-            vendasHojeElement.textContent = vendasHoje.length;
-        }
-        
-        // Buscar total de produtos em estoque
-        this.buscarTotalProdutos().then(total => {
-            const produtosElement = document.getElementById('produtosEmEstoque');
-            if (produtosElement) {
-                produtosElement.textContent = total;
-            }
-        });
+        document.getElementById('vendasHoje').textContent = vendasHoje.length;
+        document.getElementById('produtosEstoque').textContent = this.data.totalProdutos || '...';
     },
     
     mostrarEstoqueBaixo() {
@@ -107,43 +84,45 @@ const DashboardFuncionario = {
         if (!container) return;
         
         if (!this.data.estoqueBaixo || this.data.estoqueBaixo.length === 0) {
-            container.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 15px;">✅ Todos os produtos estão com estoque adequado</div>';
+            container.innerHTML = `
+                <div style="text-align: center; padding: 20px; color: var(--text-muted);">
+                    ✅ Todos os produtos estão com estoque adequado
+                </div>
+            `;
             return;
         }
         
         container.innerHTML = this.data.estoqueBaixo.slice(0, 5).map(p => `
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-color);">
-                <div>
-                    <strong>${p.nome}</strong>
-                    <br>
+            <div class="product-item">
+                <div class="product-info">
+                    <h4>${p.nome}</h4>
                     <small>Estoque: ${p.quantidade} unidades</small>
                 </div>
-                <span class="badge badge-warning">⚠️ Baixo</span>
+                <span class="stock-badge">⚠️ Baixo</span>
             </div>
         `).join('');
     },
     
     mostrarUltimasVendas() {
-        const tbody = document.querySelector('#ultimasVendasTable tbody');
+        const tbody = document.getElementById('ultimasVendasTable');
         if (!tbody) return;
         
         if (!this.data.ultimasVendas || this.data.ultimasVendas.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Nenhuma venda recente</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">Nenhuma venda recente</td></tr>';
             return;
         }
         
-        tbody.innerHTML = this.data.ultimasVendas.map(v => `
+        tbody.innerHTML = this.data.ultimasVendas.slice(0, 5).map(v => `
             <tr>
                 <td>#${v.id}</td>
                 <td>${new Date(v.data_venda).toLocaleString('pt-BR')}</td>
                 <td>${UI.formatCurrency(v.total)}</td>
-                <td><span class="badge badge-success">${v.forma_pagamento || 'N/A'}</span></td>
+                <td><span class="badge-pagamento">${v.forma_pagamento || 'N/A'}</span></td>
             </tr>
         `).join('');
     },
     
     configurarAtualizacao() {
-        // Atualizar a cada 30 segundos
         setInterval(() => {
             if (document.visibilityState === 'visible') {
                 this.carregarDados();

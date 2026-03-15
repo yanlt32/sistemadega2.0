@@ -101,31 +101,36 @@ const Auth = {
     updateMenuByRole() {
         const isAdmin = this.isAdmin();
         const menuItems = document.querySelectorAll('.sidebar-menu li');
+        const currentPath = window.location.pathname;
         
         menuItems.forEach(item => {
             const text = item.textContent || '';
             
-            // Se for funcionário, esconder itens de admin
-            if (!isAdmin) {
+            if (isAdmin) {
+                // ADMIN - mostra todos os itens
+                item.style.display = 'flex';
+            } else {
+                // FUNCIONÁRIO - mostra apenas Produtos, Vendas, Histórico
                 if (text.includes('Dashboard') || 
                     text.includes('Categorias') || 
                     text.includes('Relatórios') || 
                     text.includes('Gastos') || 
                     text.includes('Financeiro')) {
                     item.style.display = 'none';
+                } else {
+                    item.style.display = 'flex';
                 }
-            }
-            
-            // Itens que todos podem ver
-            if (text.includes('Produtos') || 
-                text.includes('Vendas') || 
-                text.includes('Histórico')) {
-                item.style.display = 'flex';
             }
         });
 
+        // Se for funcionário e estiver na página de dashboard, redireciona para vendas
+        if (!isAdmin && currentPath.includes('dashboard.html')) {
+            window.location.href = '/vendas.html';
+            return;
+        }
+
         // Esconder botões de ação para funcionário em produtos
-        if (!isAdmin && window.location.pathname.includes('produtos.html')) {
+        if (!isAdmin && currentPath.includes('produtos.html')) {
             const btnNovo = document.getElementById('btnNovoProduto');
             if (btnNovo) btnNovo.style.display = 'none';
         }

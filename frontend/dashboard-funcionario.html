@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>Dashboard - PodPá</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        /* Estilos específicos para o dashboard do funcionário */
+        .welcome-card {
+            background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+            border-left: 4px solid var(--accent-primary);
+            margin-bottom: 20px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        
+        .stat-item {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid var(--border-color);
+            transition: transform 0.2s;
+        }
+        
+        .stat-item:hover {
+            transform: translateY(-3px);
+            border-color: var(--accent-primary);
+        }
+        
+        .stat-icon {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+        
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--accent-primary);
+            line-height: 1.2;
+        }
+        
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 13px;
+            margin-top: 5px;
+        }
+        
+        .section-title {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .section-title span {
+            color: var(--accent-primary);
+        }
+        
+        .product-list {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 15px;
+            border: 1px solid var(--border-color);
+        }
+        
+        .product-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .product-item:last-child {
+            border-bottom: none;
+        }
+        
+        .product-info h4 {
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+        
+        .product-info small {
+            color: var(--text-muted);
+        }
+        
+        .stock-badge {
+            background: rgba(185, 28, 60, 0.15);
+            color: var(--danger);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .vendas-table {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 15px;
+            border: 1px solid var(--border-color);
+            overflow-x: auto;
+        }
+        
+        .vendas-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .vendas-table th {
+            text-align: left;
+            padding: 12px 8px;
+            color: var(--text-muted);
+            font-weight: 500;
+            font-size: 13px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .vendas-table td {
+            padding: 10px 8px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .vendas-table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .badge-pagamento {
+            background: rgba(196, 167, 71, 0.15);
+            color: var(--accent-primary);
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+        }
+        
+        /* Responsivo */
+        @media (max-width: 480px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+            
+            .stat-item {
+                padding: 15px;
+            }
+            
+            .stat-value {
+                font-size: 24px;
+            }
+            
+            .product-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+            
+            .product-item .btn {
+                width: 100%;
+            }
+            
+            .vendas-table {
+                padding: 10px;
+            }
+            
+            .vendas-table th,
+            .vendas-table td {
+                padding: 8px 5px;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="company-logo">
+                    <img src="/assets/logo.png" alt="PodPá Logo" onerror="this.style.display='none'">
+                    <h2>PODPÁ</h2>
+                </div>
+            </div>
+            <ul class="sidebar-menu">
+                <li class="active">📊 <span>Dashboard</span></li>
+                <li onclick="window.location.href='/produtos.html'">📦 <span>Produtos</span></li>
+                <li onclick="window.location.href='/vendas.html'">💰 <span>Vendas</span></li>
+                <li onclick="window.location.href='/historico-vendas.html'">📋 <span>Histórico</span></li>
+            </ul>
+        </aside>
+        
+        <main class="main-content">
+            <div class="top-bar">
+                <h1>Dashboard</h1>
+                <div class="user-info">
+                    <span id="userNome"></span>
+                    <span id="userRole" class="badge badge-info">Funcionário</span>
+                    <button class="logout-btn" id="logoutBtn">Sair</button>
+                </div>
+            </div>
+            
+            <!-- Card de boas-vindas -->
+            <div class="welcome-card card">
+                <h3>👋 Olá, <span id="userNomeDisplay"></span>!</h3>
+                <p style="color: var(--text-muted); margin-top: 5px;">Acompanhe suas vendas e o estoque da loja</p>
+            </div>
+            
+            <!-- Estatísticas rápidas -->
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-icon">💰</div>
+                    <div class="stat-value" id="vendasHoje">0</div>
+                    <div class="stat-label">Vendas hoje</div>
+                </div>
+                
+                <div class="stat-item">
+                    <div class="stat-icon">📦</div>
+                    <div class="stat-value" id="produtosEstoque">0</div>
+                    <div class="stat-label">Produtos</div>
+                </div>
+            </div>
+            
+            <!-- Produtos com estoque baixo -->
+            <div class="section-title">
+                <span>⚠️</span> Produtos com Estoque Baixo
+            </div>
+            <div class="product-list" id="estoqueBaixoLista">
+                <div style="text-align: center; padding: 20px; color: var(--text-muted);">Carregando...</div>
+            </div>
+            
+            <!-- Últimas vendas -->
+            <div class="section-title" style="margin-top: 25px;">
+                <span>🕐</span> Últimas Vendas
+            </div>
+            <div class="vendas-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Data/Hora</th>
+                            <th>Total</th>
+                            <th>Pagamento</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ultimasVendasTable"></tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/app.js"></script>
+    <script src="/js/realtime.js"></script>
+    <script src="/js/dashboard-funcionario.js"></script>
+    
+    <!-- Menu Hambúrguer -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const menuToggle = document.createElement('button');
+            menuToggle.className = 'menu-toggle';
+            menuToggle.innerHTML = '☰';
+            menuToggle.setAttribute('aria-label', 'Abrir menu');
+            
+            const overlay = document.createElement('div');
+            overlay.className = 'sidebar-overlay';
+            
+            document.body.appendChild(menuToggle);
+            document.body.appendChild(overlay);
+            
+            const sidebar = document.querySelector('.sidebar');
+            
+            menuToggle.addEventListener('click', function() {
+                sidebar.classList.toggle('active');
+                overlay.classList.toggle('active');
+                menuToggle.classList.toggle('active');
+                menuToggle.innerHTML = sidebar.classList.contains('active') ? '✕' : '☰';
+            });
+            
+            overlay.addEventListener('click', function() {
+                sidebar.classList.remove('active');
+                overlay.classList.remove('active');
+                menuToggle.classList.remove('active');
+                menuToggle.innerHTML = '☰';
+            });
+            
+            document.querySelectorAll('.sidebar-menu li').forEach(item => {
+                item.addEventListener('click', function() {
+                    if (window.innerWidth <= 768) {
+                        sidebar.classList.remove('active');
+                        overlay.classList.remove('active');
+                        menuToggle.classList.remove('active');
+                        menuToggle.innerHTML = '☰';
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

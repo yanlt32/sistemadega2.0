@@ -1,5 +1,5 @@
 // ============================================
-// DASHBOARD ADMIN - VERSÃO COMPLETA
+// DASHBOARD ADMIN - VERSÃO CORRIGIDA
 // ============================================
 const DashboardAdmin = {
     charts: {},
@@ -8,7 +8,6 @@ const DashboardAdmin = {
     async init() {
         await Auth.checkAuth();
         
-        // Verificar se é admin
         const user = Auth.getCurrentUser();
         if (!user || user.role !== 'admin') {
             window.location.href = '/vendas.html';
@@ -24,35 +23,57 @@ const DashboardAdmin = {
         try {
             UI.showLoading();
             
-            // Buscar todos os dados necessários
-            const [lucroDiario, lucroMensal, estoqueBaixo, vendasPeriodo, produtoMaisVendido] = await Promise.all([
+            const [lucroDiario, lucroMensal, estoqueBaixo, vendasPeriodo, produtoMaisVendido, ultimasVendas] = await Promise.all([
                 API.lucroDiario().catch(() => ({ total_vendas: 0, total_lucro: 0, quantidade_vendas: 0 })),
                 API.lucroMensal().catch(() => ({ total_vendas: 0, total_lucro: 0 })),
                 API.estoqueBaixo().catch(() => []),
                 API.vendasPorPeriodo('dia').catch(() => []),
-                API.produtoMaisVendido().catch(() => null)
+                API.produtoMaisVendido().catch(() => null),
+                API.listarVendas({ limite: 10 }).catch(() => ({ vendas: [] }))
             ]);
+            
+            const vendasUltimos7Dias = this.processarVendasSemana(vendasPeriodo);
             
             this.data = {
                 lucroDiario,
                 lucroMensal,
                 estoqueBaixo,
-                vendasPeriodo: vendasPeriodo.slice(0, 7).reverse(),
-                produtoMaisVendido
+                vendasPeriodo: vendasUltimos7Dias,
+                produtoMaisVendido,
+                ultimasVendas: ultimasVendas.vendas || []
             };
             
             this.atualizarCards();
             this.atualizarGraficos();
             this.mostrarEstoqueBaixo();
             this.mostrarProdutoMaisVendido();
-            this.carregarUltimasVendas();
+            this.mostrarUltimasVendas();
             
         } catch (error) {
             console.error('Erro ao carregar dashboard:', error);
-            Notificacao.mostrar('Erro ao carregar dados', 'danger');
         } finally {
             UI.hideLoading();
         }
+    },
+    
+    processarVendasSemana(vendasPeriodo) {
+        const ultimos7Dias = [];
+        const hoje = new Date();
+        
+        for (let i = 6; i >= 0; i--) {
+            const data = new Date(hoje);
+            data.setDate(hoje.getDate() - i);
+            const dataStr = data.toISOString().split('T')[0];
+            
+            const vendaDia = vendasPeriodo.find(v => v.periodo === dataStr) || { total_vendas: 0 };
+            
+            ultimos7Dias.push({
+                data: data.toLocaleDateString('pt-BR', { weekday: 'short' }),
+                total: vendaDia.total_vendas || 0
+            });
+        }
+        
+        return ultimos7Dias;
     },
     
     atualizarCards() {
@@ -62,7 +83,8 @@ const DashboardAdmin = {
             vendasSemana: document.getElementById('vendasSemana'),
             lucroSemana: document.getElementById('lucroSemana'),
             vendasMes: document.getElementById('vendasMes'),
-            estoqueBaixo: document.getElementById('estoqueBaixo')
+            estoqueBaixo: document.getElementById('estoqueBaixo'),
+            ticketMedio: document.getElementById('ticketMedio')
         };
         
         if (elementos.vendasHoje) {
@@ -74,13 +96,14 @@ const DashboardAdmin = {
         }
         
         if (elementos.vendasSemana) {
-            const totalSemana = this.data.vendasPeriodo.reduce((acc, d) => acc + (d.total_vendas || 0), 0);
+            const totalSemana = this.data.vendasPeriodo.reduce((acc, d) => acc + d.total, 0);
             elementos.vendasSemana.textContent = UI.formatCurrency(totalSemana);
         }
         
         if (elementos.lucroSemana) {
-            const lucroSemana = this.data.vendasPeriodo.reduce((acc, d) => acc + (d.total_lucro || 0), 0);
-            elementos.lucroSemana.textContent = UI.formatCurrency(lucroSemana);
+            const totalVendas = this.data.vendasPeriodo.reduce((acc, d) => acc + d.total, 0);
+            const margemLucro = 0.3;
+            elementos.lucroSemana.textContent = UI.formatCurrency(totalVendas * margemLucro);
         }
         
         if (elementos.vendasMes) {
@@ -90,13 +113,35 @@ const DashboardAdmin = {
         if (elementos.estoqueBaixo) {
             elementos.estoqueBaixo.textContent = this.data.estoqueBaixo?.length || 0;
         }
+        
+        if (elementos.ticketMedio) {
+            const qtd = this.data.lucroDiario?.quantidade_vendas || 1;
+            const ticket = (this.data.lucroDiario?.total_vendas || 0) / qtd;
+            elementos.ticketMedio.textContent = UI.formatCurrency(ticket);
+        }
     },
     
     inicializarGraficos() {
+        // Destruir gráficos existentes
+        if (this.charts.vendas) {
+            this.charts.vendas.destroy();
+            this.charts.vendas = null;
+        }
+        
+        if (this.charts.produtos) {
+            this.charts.produtos.destroy();
+            this.charts.produtos = null;
+        }
+        
         // Gráfico de Vendas por Dia
-        const ctxVendas = document.getElementById('graficoVendasSemana')?.getContext('2d');
+        const ctxVendas = document.getElementById('graficoVendasSemana');
         if (ctxVendas) {
-            this.charts.vendas = new Chart(ctxVendas, {
+            // Limpar o canvas
+            const canvas = ctxVendas;
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+            
+            this.charts.vendas = new Chart(canvas, {
                 type: 'line',
                 data: {
                     labels: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'],
@@ -105,13 +150,14 @@ const DashboardAdmin = {
                         data: [0, 0, 0, 0, 0, 0, 0],
                         borderColor: '#c4a747',
                         backgroundColor: 'rgba(196, 167, 71, 0.1)',
-                        borderWidth: 2,
+                        borderWidth: 3,
                         tension: 0.4,
                         fill: true,
                         pointBackgroundColor: '#c4a747',
                         pointBorderColor: '#fff',
                         pointBorderWidth: 2,
-                        pointRadius: 4
+                        pointRadius: 5,
+                        pointHoverRadius: 7
                     }]
                 },
                 options: {
@@ -130,7 +176,7 @@ const DashboardAdmin = {
                             grid: { color: '#2d3540' },
                             ticks: {
                                 color: '#94a3b8',
-                                callback: (value) => 'R$ ' + value
+                                callback: (value) => 'R$ ' + value.toFixed(0)
                             }
                         },
                         x: {
@@ -143,12 +189,16 @@ const DashboardAdmin = {
         }
         
         // Gráfico de Produtos Mais Vendidos
-        const ctxProdutos = document.getElementById('graficoProdutos')?.getContext('2d');
+        const ctxProdutos = document.getElementById('graficoProdutos');
         if (ctxProdutos) {
-            this.charts.produtos = new Chart(ctxProdutos, {
+            const canvas = ctxProdutos;
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+            
+            this.charts.produtos = new Chart(canvas, {
                 type: 'doughnut',
                 data: {
-                    labels: ['Aguardando dados...'],
+                    labels: ['Carregando...'],
                     datasets: [{
                         data: [1],
                         backgroundColor: ['#c4a747'],
@@ -158,15 +208,13 @@ const DashboardAdmin = {
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    cutout: '70%',
+                    cutout: '65%',
                     plugins: {
                         legend: {
                             position: 'bottom',
-                            labels: { color: '#94a3b8', font: { size: 12 } }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: (context) => `${context.label}: ${context.raw} unidades`
+                            labels: { 
+                                color: '#94a3b8',
+                                font: { size: 12 }
                             }
                         }
                     }
@@ -176,26 +224,22 @@ const DashboardAdmin = {
     },
     
     atualizarGraficos() {
-        // Atualizar gráfico de vendas
         if (this.charts.vendas && this.data.vendasPeriodo.length > 0) {
-            const dadosSemana = [0, 0, 0, 0, 0, 0, 0];
-            this.data.vendasPeriodo.forEach((item, index) => {
-                if (index < 7) dadosSemana[index] = item.total_vendas || 0;
-            });
-            
-            this.charts.vendas.data.datasets[0].data = dadosSemana;
+            this.charts.vendas.data.datasets[0].data = this.data.vendasPeriodo.map(d => d.total);
             this.charts.vendas.update();
         }
         
-        // Atualizar gráfico de produtos
-        if (this.charts.produtos && this.data.produtoMaisVendido?.nome) {
-            this.charts.produtos.data.labels = [this.data.produtoMaisVendido.nome, 'Outros'];
-            this.charts.produtos.data.datasets[0].data = [
-                this.data.produtoMaisVendido.total_vendido || 1,
-                1
-            ];
-            this.charts.produtos.data.datasets[0].backgroundColor = ['#c4a747', '#2d3540'];
-            this.charts.produtos.update();
+        if (this.charts.produtos && this.data.produtoMaisVendido) {
+            const produto = this.data.produtoMaisVendido;
+            if (produto && produto.nome) {
+                this.charts.produtos.data.labels = [produto.nome, 'Outros'];
+                this.charts.produtos.data.datasets[0].data = [
+                    produto.total_vendido || 1,
+                    Math.max(1, (produto.total_vendido || 1) * 0.3)
+                ];
+                this.charts.produtos.data.datasets[0].backgroundColor = ['#c4a747', '#2d3540'];
+                this.charts.produtos.update();
+            }
         }
     },
     
@@ -203,9 +247,9 @@ const DashboardAdmin = {
         const container = document.getElementById('estoqueBaixoLista');
         if (!container) return;
         
-        if (!this.data.estoqueBaixo?.length) {
+        if (!this.data.estoqueBaixo || this.data.estoqueBaixo.length === 0) {
             container.innerHTML = `
-                <div style="color: var(--text-muted); text-align: center; padding: 15px;">
+                <div style="color: var(--text-muted); text-align: center; padding: 20px;">
                     ✅ Todos os produtos estão com estoque adequado
                 </div>
             `;
@@ -213,13 +257,15 @@ const DashboardAdmin = {
         }
         
         container.innerHTML = this.data.estoqueBaixo.slice(0, 5).map(p => `
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid var(--border-color);">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid var(--border-color);">
                 <div>
-                    <strong>${p.nome}</strong>
+                    <strong style="color: var(--text-primary);">${p.nome}</strong>
                     <br>
-                    <small>Estoque: ${p.quantidade} unidades</small>
+                    <small style="color: var(--text-muted);">Estoque: ${p.quantidade} unidades</small>
                 </div>
-                <button class="btn btn-primary btn-sm" onclick="Produtos.abrirModalEstoque(${p.id})">Repor</button>
+                <button class="btn btn-primary btn-sm" onclick="Produtos.abrirModalEstoque(${p.id})">
+                    Repor
+                </button>
             </div>
         `).join('');
     },
@@ -228,48 +274,41 @@ const DashboardAdmin = {
         const container = document.getElementById('produtoMaisVendido');
         if (!container) return;
         
-        if (this.data.produtoMaisVendido?.nome) {
+        if (this.data.produtoMaisVendido && this.data.produtoMaisVendido.nome) {
+            const produto = this.data.produtoMaisVendido;
             container.innerHTML = `
-                <div style="text-align: center; padding: 15px;">
-                    <div style="font-size: 24px; margin-bottom: 10px;">🏆</div>
-                    <h4 style="color: var(--accent-primary); margin-bottom: 5px;">${this.data.produtoMaisVendido.nome}</h4>
-                    <p style="color: var(--text-muted);">${this.data.produtoMaisVendido.total_vendido || 0} unidades</p>
+                <div style="text-align: center; padding: 20px;">
+                    <div style="font-size: 48px; margin-bottom: 10px;">🏆</div>
+                    <h4 style="color: var(--accent-primary); margin-bottom: 5px; font-size: 18px;">${produto.nome}</h4>
+                    <p style="color: var(--text-muted);">${produto.total_vendido || 0} unidades vendidas</p>
                 </div>
             `;
         } else {
             container.innerHTML = `
-                <div style="color: var(--text-muted); text-align: center; padding: 15px;">
-                    Nenhuma venda registrada
+                <div style="color: var(--text-muted); text-align: center; padding: 20px;">
+                    Nenhuma venda registrada ainda
                 </div>
             `;
         }
     },
     
-    async carregarUltimasVendas() {
-        try {
-            const response = await API.listarVendas({ limite: 5 });
-            const vendas = response.vendas || [];
-            
-            const tbody = document.querySelector('#tabelaUltimasVendas tbody');
-            if (!tbody) return;
-            
-            if (!vendas.length) {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Nenhuma venda recente</td></tr>';
-                return;
-            }
-            
-            tbody.innerHTML = vendas.map(v => `
-                <tr>
-                    <td>#${v.id}</td>
-                    <td>${new Date(v.data_venda).toLocaleString('pt-BR')}</td>
-                    <td>${UI.formatCurrency(v.total)}</td>
-                    <td><span class="badge badge-success">${v.forma_pagamento}</span></td>
-                </tr>
-            `).join('');
-            
-        } catch (error) {
-            console.error('Erro ao carregar últimas vendas:', error);
+    mostrarUltimasVendas() {
+        const tbody = document.querySelector('#tabelaUltimasVendas tbody');
+        if (!tbody) return;
+        
+        if (!this.data.ultimasVendas || this.data.ultimasVendas.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">Nenhuma venda recente</td></tr>';
+            return;
         }
+        
+        tbody.innerHTML = this.data.ultimasVendas.slice(0, 5).map(v => `
+            <tr>
+                <td>#${v.id}</td>
+                <td>${new Date(v.data_venda).toLocaleString('pt-BR')}</td>
+                <td>${UI.formatCurrency(v.total)}</td>
+                <td><span class="badge badge-success">${v.forma_pagamento || 'N/A'}</span></td>
+            </tr>
+        `).join('');
     },
     
     configurarAtualizacao() {
@@ -280,10 +319,3 @@ const DashboardAdmin = {
         }, 30000);
     }
 };
-
-// Inicializar quando a página carregar
-document.addEventListener('DOMContentLoaded', () => {
-    if (window.location.pathname.includes('dashboard.html')) {
-        DashboardAdmin.init();
-    }
-});

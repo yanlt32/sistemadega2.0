@@ -52,24 +52,48 @@ const Realtime = {
     
     conectar() {
         try {
+            // Verificar se o Socket.IO está disponível
+            if (typeof io === 'undefined') {
+                console.log('⚠️ Socket.IO não disponível, usando fallback');
+                this.connected = false;
+                
+                // Fallback: usar polling simples a cada 30 segundos
+                setInterval(() => {
+                    if (document.visibilityState === 'visible') {
+                        this.atualizarPaginas(['dashboard', 'produtos', 'vendas', 'historico']);
+                    }
+                }, 30000);
+                return;
+            }
+            
             // Detectar URL do servidor
             const serverUrl = window.location.hostname.includes('onrender.com') 
                 ? `https://${window.location.hostname}`
                 : `http://${window.location.hostname}:3000`;
             
+            console.log('🔄 Conectando ao servidor WebSocket:', serverUrl);
+            
             this.socket = io(serverUrl, {
                 reconnection: true,
                 reconnectionAttempts: 5,
-                reconnectionDelay: 1000
+                reconnectionDelay: 1000,
+                transports: ['polling', 'websocket'] // Fallback para polling
             });
             
             this.socket.on('connect', () => {
                 console.log('🟢 Conectado ao servidor');
                 this.connected = true;
+                Notificacao.mostrar('🟢 Conectado ao servidor', 'success', 2000);
             });
             
             this.socket.on('disconnect', () => {
                 console.log('🔴 Desconectado do servidor');
+                this.connected = false;
+                Notificacao.mostrar('🔴 Desconectado. Reconectando...', 'warning', 3000);
+            });
+            
+            this.socket.on('connect_error', (error) => {
+                console.log('⚠️ Erro na conexão:', error);
                 this.connected = false;
             });
             
@@ -130,13 +154,21 @@ const Realtime = {
             
         } catch (error) {
             console.error('Erro ao conectar WebSocket:', error);
+            this.connected = false;
+            
+            // Fallback em caso de erro
+            setInterval(() => {
+                if (document.visibilityState === 'visible') {
+                    this.atualizarPaginas(['dashboard', 'produtos', 'vendas', 'historico']);
+                }
+            }, 30000);
         }
     },
     
     configurarListeners() {
         // Atualização manual (pode ser chamada por botões)
         document.addEventListener('realtime:update', (e) => {
-            if (e.detail.paginas) {
+            if (e.detail && e.detail.paginas) {
                 this.atualizarPaginas(e.detail.paginas);
             }
         });
@@ -146,45 +178,55 @@ const Realtime = {
         const path = window.location.pathname;
         
         paginas.forEach(pagina => {
-            switch(pagina) {
-                case 'dashboard':
-                    if (path.includes('dashboard.html') && window.Dashboard) {
-                        Dashboard.loadData(true);
-                    }
-                    break;
-                    
-                case 'produtos':
-                    if (path.includes('produtos.html') && window.Produtos) {
-                        Produtos.carregar(true);
-                    }
-                    break;
-                    
-                case 'vendas':
-                    if (path.includes('vendas.html') && window.Vendas) {
-                        Vendas.carregarProdutos(true);
-                    }
-                    break;
-                    
-                case 'historico':
-                    if (path.includes('historico-vendas.html') && window.HistoricoVendas) {
-                        if (typeof HistoricoVendas.carregar === 'function') {
-                            HistoricoVendas.carregar();
+            try {
+                switch(pagina) {
+                    case 'dashboard':
+                        if (path.includes('dashboard.html')) {
+                            if (window.DashboardAdmin) {
+                                DashboardAdmin.carregarDados?.();
+                            } else if (window.Dashboard) {
+                                Dashboard.loadData?.(true);
+                            } else if (window.DashboardFuncionario) {
+                                DashboardFuncionario.carregarDados?.();
+                            }
                         }
-                    }
-                    break;
-                    
-                case 'categorias':
-                    if (path.includes('categorias.html') && window.CategoriasManager) {
-                        CategoriasManager.carregarCategorias();
-                        CategoriasManager.carregarTipos();
-                    }
-                    break;
-                    
-                case 'relatorios':
-                    if (path.includes('relatorios.html') && window.Relatorios) {
-                        Relatorios.carregar();
-                    }
-                    break;
+                        break;
+                        
+                    case 'produtos':
+                        if (path.includes('produtos.html') && window.Produtos) {
+                            Produtos.carregar?.(true);
+                        }
+                        break;
+                        
+                    case 'vendas':
+                        if (path.includes('vendas.html') && window.Vendas) {
+                            Vendas.carregarProdutos?.(true);
+                        }
+                        break;
+                        
+                    case 'historico':
+                        if (path.includes('historico-vendas.html') && window.HistoricoVendas) {
+                            if (typeof HistoricoVendas.carregar === 'function') {
+                                HistoricoVendas.carregar();
+                            }
+                        }
+                        break;
+                        
+                    case 'categorias':
+                        if (path.includes('categorias.html') && window.CategoriasManager) {
+                            CategoriasManager.carregarCategorias?.();
+                            CategoriasManager.carregarTipos?.();
+                        }
+                        break;
+                        
+                    case 'relatorios':
+                        if (path.includes('relatorios.html') && window.Relatorios) {
+                            Relatorios.carregar?.();
+                        }
+                        break;
+                }
+            } catch (error) {
+                console.error(`Erro ao atualizar página ${pagina}:`, error);
             }
         });
     },
@@ -200,12 +242,12 @@ const Realtime = {
                 position: fixed;
                 top: 20px;
                 right: 20px;
-                min-width: 300px;
-                max-width: 400px;
-                background: var(--bg-card, #242830);
-                border-radius: 8px;
+                min-width: 280px;
+                max-width: 350px;
+                background: var(--bg-secondary, #1a1f26);
+                border-radius: 12px;
                 padding: 16px;
-                box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+                box-shadow: 0 10px 30px rgba(0,0,0,0.5);
                 display: flex;
                 align-items: center;
                 gap: 12px;
@@ -214,22 +256,38 @@ const Realtime = {
                 animation: slideIn 0.3s ease;
                 overflow: hidden;
                 color: var(--text-primary, #fff);
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                font-family: 'Inter', sans-serif;
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255,255,255,0.1);
             }
             
-            .toast-success { border-left-color: #00c853; }
-            .toast-danger { border-left-color: #f44336; }
-            .toast-warning { border-left-color: #ff9800; }
-            .toast-info { border-left-color: #2196f3; }
+            .toast-success { 
+                border-left-color: #c4a747;
+                background: rgba(26, 31, 38, 0.95);
+            }
+            .toast-danger { 
+                border-left-color: #b91c3c;
+                background: rgba(26, 31, 38, 0.95);
+            }
+            .toast-warning { 
+                border-left-color: #ff9800;
+                background: rgba(26, 31, 38, 0.95);
+            }
+            .toast-info { 
+                border-left-color: #2196f3;
+                background: rgba(26, 31, 38, 0.95);
+            }
             
             .toast-icon {
                 font-size: 24px;
+                filter: drop-shadow(0 2px 5px rgba(0,0,0,0.3));
             }
             
             .toast-message {
                 flex: 1;
                 font-size: 14px;
                 line-height: 1.5;
+                font-weight: 500;
             }
             
             .toast-progress {
@@ -238,7 +296,7 @@ const Realtime = {
                 left: 0;
                 height: 3px;
                 background: currentColor;
-                opacity: 0.5;
+                opacity: 0.3;
                 animation: progress 3s linear;
             }
             
@@ -276,6 +334,7 @@ const Realtime = {
             
             .modal-content {
                 animation: slideDown 0.2s ease;
+                box-shadow: 0 20px 40px rgba(0,0,0,0.4);
             }
             
             @keyframes fadeIn {
@@ -285,7 +344,7 @@ const Realtime = {
             
             @keyframes slideDown {
                 from {
-                    transform: translateY(-20px);
+                    transform: translateY(-30px);
                     opacity: 0;
                 }
                 to {
@@ -296,20 +355,41 @@ const Realtime = {
             
             /* Loading spinner melhorado */
             .spinner-container {
-                backdrop-filter: blur(3px);
+                backdrop-filter: blur(5px);
+                background: rgba(0,0,0,0.7);
             }
             
             .spinner {
                 width: 50px;
                 height: 50px;
-                border: 4px solid var(--bg-input, #2d323c);
-                border-top-color: var(--green, #00c853);
+                border: 4px solid var(--bg-tertiary, #2d323c);
+                border-top-color: var(--accent-primary, #c4a747);
                 border-radius: 50%;
-                animation: spin 0.8s linear infinite;
+                animation: spin 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
+                box-shadow: 0 0 20px rgba(196, 167, 71, 0.3);
             }
             
             @keyframes spin {
                 to { transform: rotate(360deg); }
+            }
+            
+            /* Scrollbar personalizada */
+            ::-webkit-scrollbar {
+                width: 8px;
+                height: 8px;
+            }
+            
+            ::-webkit-scrollbar-track {
+                background: var(--bg-secondary);
+            }
+            
+            ::-webkit-scrollbar-thumb {
+                background: var(--accent-primary);
+                border-radius: 4px;
+            }
+            
+            ::-webkit-scrollbar-thumb:hover {
+                background: var(--accent-secondary);
             }
         `;
         document.head.appendChild(style);
@@ -331,7 +411,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Aguardar um pouco para garantir que o socket.io carregou
         setTimeout(() => {
             Realtime.init();
-        }, 500);
+        }, 1000);
     }
 });
 

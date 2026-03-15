@@ -1,5 +1,5 @@
 // ============================================
-// ADEGA SYSTEM - SISTEMA DE GESTÃO PROFISSIONAL
+// PODPÁ - SISTEMA DE GESTÃO PROFISSIONAL
 // VERSÃO: 2.0.0
 // ============================================
 
@@ -22,7 +22,7 @@ class App {
     }
 
     static init() {
-        console.log(`🍷 Adega System v${this.version} inicializado`);
+        console.log(`🍷 PodPá v${this.version} inicializado`);
         
         // Inicializar módulos baseados na página atual
         this.setupEventListeners();
@@ -55,92 +55,94 @@ class App {
     }
 
     static checkCurrentPage() {
-    const path = window.location.pathname;
-    const user = Auth.getCurrentUser();
-    
-    console.log('Página atual:', path, 'Usuário:', user);
-    
-    // Se não tiver usuário e não for página de login
-    if (!user && !path.includes('index.html') && path !== '/') {
-        window.location.href = '/';
-        return;
-    }
-    
-    // DASHBOARD - APENAS ADMIN
-    if (path.includes('dashboard.html')) {
-        if (user && user.role === 'admin') {
-            console.log('Carregando dashboard admin');
-            if (window.DashboardAdmin) {
-                DashboardAdmin.init();
+        const path = window.location.pathname;
+        const user = Auth.getCurrentUser();
+        
+        console.log('Página atual:', path, 'Usuário:', user);
+        
+        if (!user && !path.includes('index.html') && path !== '/') {
+            window.location.href = '/';
+            return;
+        }
+        
+        // DASHBOARD - ADMIN TEM DASHBOARD COMPLETO, FUNCIONÁRIO TEM VERSÃO SIMPLIFICADA
+        if (path.includes('dashboard.html')) {
+            if (user && user.role === 'admin') {
+                console.log('Carregando dashboard admin');
+                if (window.DashboardAdmin) {
+                    DashboardAdmin.init();
+                } else {
+                    Dashboard.init();
+                }
             } else {
-                Dashboard.init();
+                console.log('Carregando dashboard funcionário');
+                if (window.DashboardFuncionario) {
+                    DashboardFuncionario.init();
+                } else {
+                    window.location.href = '/vendas.html';
+                }
             }
-        } else {
-            // Funcionário é redirecionado para vendas
-            console.log('Funcionário redirecionado para vendas');
-            window.location.href = '/vendas.html';
+            return;
         }
-        return;
-    }
-    
-    // PRODUTOS - todos podem (com permissões diferentes)
-    if (path.includes('produtos.html')) {
-        Produtos.init();
-        return;
-    }
-    
-    // VENDAS - todos podem
-    if (path.includes('vendas.html')) {
-        Vendas.init();
-        return;
-    }
-    
-    // HISTÓRICO - todos podem
-    if (path.includes('historico-vendas.html')) {
-        if (window.HistoricoVendas) HistoricoVendas.init();
-        return;
-    }
-    
-    // CATEGORIAS - apenas admin
-    if (path.includes('categorias.html')) {
-        if (user?.role === 'admin') {
-            CategoriasManager.init();
-        } else {
-            window.location.href = '/vendas.html';
+        
+        // PRODUTOS - todos podem (com permissões diferentes)
+        if (path.includes('produtos.html')) {
+            Produtos.init();
+            return;
         }
-        return;
-    }
-    
-    // RELATÓRIOS - apenas admin
-    if (path.includes('relatorios.html')) {
-        if (user?.role === 'admin') {
-            Relatorios.init();
-        } else {
-            window.location.href = '/vendas.html';
+        
+        // VENDAS - todos podem
+        if (path.includes('vendas.html')) {
+            Vendas.init();
+            return;
         }
-        return;
-    }
-    
-    // GASTOS - apenas admin
-    if (path.includes('gastos.html')) {
-        if (user?.role === 'admin') {
-            if (window.Gastos) Gastos.init();
-        } else {
-            window.location.href = '/vendas.html';
+        
+        // HISTÓRICO - todos podem
+        if (path.includes('historico-vendas.html')) {
+            if (window.HistoricoVendas) HistoricoVendas.init();
+            return;
         }
-        return;
-    }
-    
-    // FINANCEIRO - apenas admin
-    if (path.includes('financeiro.html')) {
-        if (user?.role === 'admin') {
-            if (window.Financeiro) Financeiro.init();
-        } else {
-            window.location.href = '/vendas.html';
+        
+        // CATEGORIAS - apenas admin
+        if (path.includes('categorias.html')) {
+            if (user?.role === 'admin') {
+                CategoriasManager.init();
+            } else {
+                window.location.href = '/vendas.html';
+            }
+            return;
         }
-        return;
+        
+        // RELATÓRIOS - apenas admin
+        if (path.includes('relatorios.html')) {
+            if (user?.role === 'admin') {
+                Relatorios.init();
+            } else {
+                window.location.href = '/vendas.html';
+            }
+            return;
+        }
+        
+        // GASTOS - apenas admin
+        if (path.includes('gastos.html')) {
+            if (user?.role === 'admin') {
+                if (window.Gastos) Gastos.init();
+            } else {
+                window.location.href = '/vendas.html';
+            }
+            return;
+        }
+        
+        // FINANCEIRO - apenas admin
+        if (path.includes('financeiro.html')) {
+            if (user?.role === 'admin') {
+                if (window.Financeiro) Financeiro.init();
+            } else {
+                window.location.href = '/vendas.html';
+            }
+            return;
+        }
     }
-}
 
     static closeAllModals() {
         document.querySelectorAll('.modal').forEach(modal => {
@@ -295,29 +297,36 @@ const Auth = {
     updateMenuByRole() {
         const isAdmin = this.isAdmin();
         const menuItems = document.querySelectorAll('.sidebar-menu li');
+        const currentPath = window.location.pathname;
         
         menuItems.forEach(item => {
             const text = item.textContent || '';
             
-            // Itens que apenas ADMIN pode ver
-            if (text.includes('Gastos') || 
-                text.includes('Financeiro') || 
-                text.includes('Relatórios') || 
-                text.includes('Categorias')) {
-                item.style.display = isAdmin ? 'flex' : 'none';
-            }
-            
-            // Itens que TODOS podem ver
-            if (text.includes('Dashboard') || 
-                text.includes('Produtos') || 
-                text.includes('Vendas') || 
-                text.includes('Histórico')) {
+            if (isAdmin) {
+                // ADMIN - mostra todos os itens
                 item.style.display = 'flex';
+            } else {
+                // FUNCIONÁRIO - mostra apenas Produtos, Vendas, Histórico
+                if (text.includes('Dashboard') || 
+                    text.includes('Categorias') || 
+                    text.includes('Relatórios') || 
+                    text.includes('Gastos') || 
+                    text.includes('Financeiro')) {
+                    item.style.display = 'none';
+                } else {
+                    item.style.display = 'flex';
+                }
             }
         });
 
+        // Se for funcionário e estiver na página de dashboard, redireciona para vendas
+        if (!isAdmin && currentPath.includes('dashboard.html')) {
+            window.location.href = '/vendas.html';
+            return;
+        }
+
         // Esconder botões de ação para funcionário em produtos
-        if (!isAdmin && window.location.pathname.includes('produtos.html')) {
+        if (!isAdmin && currentPath.includes('produtos.html')) {
             const btnNovo = document.getElementById('btnNovoProduto');
             if (btnNovo) btnNovo.style.display = 'none';
         }
@@ -476,6 +485,12 @@ const Dashboard = {
     },
     
     setupCharts() {
+        // Destruir gráficos existentes
+        if (this.charts.vendas) {
+            this.charts.vendas.destroy();
+            this.charts.vendas = null;
+        }
+        
         const ctxVendas = document.getElementById('graficoVendasSemana')?.getContext('2d');
         if (ctxVendas) {
             this.charts.vendas = new Chart(ctxVendas, {
@@ -488,7 +503,11 @@ const Dashboard = {
                         borderColor: '#c4a747',
                         backgroundColor: 'rgba(196, 167, 71, 0.1)',
                         tension: 0.4,
-                        fill: true
+                        fill: true,
+                        pointBackgroundColor: '#c4a747',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 4
                     }]
                 },
                 options: {
@@ -659,6 +678,20 @@ const Produtos = {
                 this.fecharModal();
             }
         });
+
+        // Leitor de código de barras no cadastro
+        const btnLerCodigoProduto = document.getElementById('btnLerCodigoProduto');
+        if (btnLerCodigoProduto && this.isAdmin) {
+            btnLerCodigoProduto.addEventListener('click', () => {
+                if (window.BarcodeReader) {
+                    BarcodeReader.abrir((codigo) => {
+                        document.getElementById('produtoCodigoBarras').value = codigo;
+                    });
+                } else {
+                    App.showNotification('Leitor não disponível', 'warning');
+                }
+            });
+        }
     },
     
     async carregarCategorias() {
@@ -737,55 +770,55 @@ const Produtos = {
         }
     },
     
-renderizar() {
-    const tbody = document.getElementById('produtosTable');
-    if (!tbody) return;
-    
-    if (this.produtos.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="7" style="text-align: center; padding: 50px;">
-                    <div style="font-size: 48px; margin-bottom: 20px;">📦</div>
-                    <h3>Nenhum produto encontrado</h3>
-                    <p style="color: var(--text-muted); margin-top: 10px;">
-                        ${this.isAdmin ? 'Clique em "Novo Produto" para começar' : 'Nenhum produto cadastrado'}
-                    </p>
-                </td>
-            </tr>
-        `;
-        return;
-    }
-    
-    tbody.innerHTML = this.produtos.map(p => {
-        // Verificar se é admin para mostrar preço de custo
-        const precoCustoDisplay = this.isAdmin ? UI.formatCurrency(p.preco_custo) : '---';
+    renderizar() {
+        const tbody = document.getElementById('produtosTable');
+        if (!tbody) return;
         
-        // Verificar se é admin para mostrar botões de ação
-        const acoesDisplay = this.isAdmin ? `
-            <div style="display: flex; gap: 5px;">
-                <button class="btn btn-primary btn-sm" onclick="Produtos.editar(${p.id})" title="Editar">✏️</button>
-                <button class="btn btn-warning btn-sm" onclick="Produtos.abrirModalEstoque(${p.id})" title="Ajustar Estoque">📦</button>
-                <button class="btn btn-danger btn-sm" onclick="Produtos.excluir(${p.id})" title="Excluir">🗑️</button>
-            </div>
-        ` : '<span class="badge badge-info">Apenas visualização</span>';
+        if (this.produtos.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" style="text-align: center; padding: 50px;">
+                        <div style="font-size: 48px; margin-bottom: 20px;">📦</div>
+                        <h3>Nenhum produto encontrado</h3>
+                        <p style="color: var(--text-muted); margin-top: 10px;">
+                            ${this.isAdmin ? 'Clique em "Novo Produto" para começar' : 'Nenhum produto cadastrado'}
+                        </p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
         
-        return `
-            <tr>
-                <td><strong>${p.nome || '-'}</strong></td>
-                <td>${p.categoria_nome || '-'}</td>
-                <td>${p.tipo_nome || '-'}</td>
-                <td>${precoCustoDisplay}</td>
-                <td>${UI.formatCurrency(p.preco_venda)}</td>
-                <td>
-                    <span class="badge ${(p.quantidade || 0) < 5 ? 'badge-warning' : 'badge-success'}">
-                        ${p.quantidade || 0}
-                    </span>
-                </td>
-                <td>${acoesDisplay}</td>
-            </tr>
-        `;
-    }).join('');
-},
+        tbody.innerHTML = this.produtos.map(p => {
+            const precoCustoDisplay = this.isAdmin ? UI.formatCurrency(p.preco_custo) : '---';
+            const codigoBarrasDisplay = p.codigo_barras || '-';
+            
+            const acoesDisplay = this.isAdmin ? `
+                <div style="display: flex; gap: 5px;">
+                    <button class="btn btn-primary btn-sm" onclick="Produtos.editar(${p.id})" title="Editar">✏️</button>
+                    <button class="btn btn-warning btn-sm" onclick="Produtos.abrirModalEstoque(${p.id})" title="Ajustar Estoque">📦</button>
+                    <button class="btn btn-danger btn-sm" onclick="Produtos.excluir(${p.id})" title="Excluir">🗑️</button>
+                </div>
+            ` : '<span class="badge badge-info">Apenas visualização</span>';
+            
+            return `
+                <tr>
+                    <td><strong>${p.nome || '-'}</strong></td>
+                    <td>${p.categoria_nome || '-'}</td>
+                    <td>${p.tipo_nome || '-'}</td>
+                    <td>${precoCustoDisplay}</td>
+                    <td>${UI.formatCurrency(p.preco_venda)}</td>
+                    <td>
+                        <span class="badge ${(p.quantidade || 0) < 5 ? 'badge-warning' : 'badge-success'}">
+                            ${p.quantidade || 0}
+                        </span>
+                    </td>
+                    <td>${codigoBarrasDisplay}</td>
+                    <td>${acoesDisplay}</td>
+                </tr>
+            `;
+        }).join('');
+    },
     
     renderizarPaginacao() {
         const container = document.getElementById('paginacao');
@@ -845,6 +878,7 @@ renderizar() {
             document.getElementById('produtoPrecoCusto').value = produto.preco_custo || '';
             document.getElementById('produtoPrecoVenda').value = produto.preco_venda || '';
             document.getElementById('produtoQuantidade').value = produto.quantidade || 0;
+            document.getElementById('produtoCodigoBarras').value = produto.codigo_barras || '';
         } else {
             document.getElementById('formProduto').reset();
         }
@@ -880,7 +914,8 @@ renderizar() {
                 tipo_id: document.getElementById('produtoTipo')?.value,
                 preco_custo: parseFloat(document.getElementById('produtoPrecoCusto')?.value) || 0,
                 preco_venda: parseFloat(document.getElementById('produtoPrecoVenda')?.value) || 0,
-                quantidade: parseInt(document.getElementById('produtoQuantidade')?.value) || 0
+                quantidade: parseInt(document.getElementById('produtoQuantidade')?.value) || 0,
+                codigo_barras: document.getElementById('produtoCodigoBarras')?.value || null
             };
             
             if (!produto.nome) throw new Error('Nome é obrigatório');
@@ -1023,6 +1058,35 @@ const Vendas = {
                 }
             });
         }
+
+        // Leitor de código de barras nas vendas
+        const btnLerCodigo = document.getElementById('btnLerCodigo');
+        if (btnLerCodigo) {
+            btnLerCodigo.addEventListener('click', () => {
+                if (window.BarcodeReader) {
+                    BarcodeReader.abrir(async (codigo) => {
+                        try {
+                            UI.showLoading();
+                            const data = await API.listarProdutos({ codigo_barras: codigo });
+                            
+                            if (data.produtos && data.produtos.length > 0) {
+                                const produto = data.produtos[0];
+                                this.adicionarAoCarrinho(produto.id);
+                                App.showNotification(`✅ Produto encontrado: ${produto.nome}`, 'success');
+                            } else {
+                                App.showNotification('❌ Produto não encontrado', 'warning');
+                            }
+                        } catch (error) {
+                            App.showNotification('Erro ao buscar produto', 'danger');
+                        } finally {
+                            UI.hideLoading();
+                        }
+                    });
+                } else {
+                    App.showNotification('Leitor não disponível', 'warning');
+                }
+            });
+        }
     },
     
     async carregarProdutos() {
@@ -1053,22 +1117,25 @@ const Vendas = {
             return;
         }
         
-        container.innerHTML = produtos.map(p => `
-            <div class="card produto-card" onclick="Vendas.adicionarAoCarrinho(${p.id})">
-                <h4>${p.nome || 'Sem nome'}</h4>
-                <div class="categoria">
-                    ${p.categoria_nome || 'Sem categoria'} • ${p.tipo_nome || 'Sem tipo'}
+        container.innerHTML = produtos.map(p => {
+            const disponivel = (p.quantidade || 0) > 0;
+            return `
+                <div class="card produto-card" onclick="Vendas.adicionarAoCarrinho(${p.id})" style="${!disponivel ? 'opacity: 0.6; cursor: not-allowed;' : ''}">
+                    <h4>${p.nome || 'Sem nome'}</h4>
+                    <div class="categoria">
+                        ${p.categoria_nome || 'Sem categoria'} • ${p.tipo_nome || 'Sem tipo'}
+                    </div>
+                    <div class="preco">${UI.formatCurrency(p.preco_venda)}</div>
+                    <div class="estoque ${(p.quantidade || 0) < 5 && disponivel ? 'estoque-baixo' : ''}">
+                        📦 Estoque: ${p.quantidade || 0}
+                    </div>
+                    ${disponivel ? 
+                        '<div class="badge badge-success" style="position: absolute; top: 10px; right: 10px;">Disponível</div>' :
+                        '<div class="badge badge-danger" style="position: absolute; top: 10px; right: 10px;">Indisponível</div>'
+                    }
                 </div>
-                <div class="preco">${UI.formatCurrency(p.preco_venda)}</div>
-                <div class="estoque ${(p.quantidade || 0) < 5 ? 'estoque-baixo' : ''}">
-                    📦 Estoque: ${p.quantidade || 0}
-                </div>
-                ${(p.quantidade || 0) > 0 ? 
-                    '<div class="badge badge-success" style="position: absolute; top: 10px; right: 10px;">Disponível</div>' :
-                    '<div class="badge badge-danger" style="position: absolute; top: 10px; right: 10px;">Indisponível</div>'
-                }
-            </div>
-        `).join('');
+            `;
+        }).join('');
     },
     
     async buscarProdutos(termo) {
@@ -1403,7 +1470,7 @@ const CategoriasManager = {
             <tr>
                 <td>
                     <span style="display: inline-block; width: 20px; height: 20px; 
-                               background-color: ${c.cor || '#4CAF50'}; border-radius: 4px; 
+                               background-color: ${c.cor || '#c4a747'}; border-radius: 4px; 
                                margin-right: 10px; vertical-align: middle;"></span>
                     ${c.nome || 'Sem nome'}
                 </td>
@@ -1500,10 +1567,10 @@ const CategoriasManager = {
             document.getElementById('categoriaId').value = categoria.id || '';
             document.getElementById('categoriaNome').value = categoria.nome || '';
             document.getElementById('categoriaTipo').value = categoria.tipo || 'outro';
-            document.getElementById('categoriaCor').value = categoria.cor || '#4CAF50';
+            document.getElementById('categoriaCor').value = categoria.cor || '#c4a747';
         } else {
             document.getElementById('formCategoria').reset();
-            document.getElementById('categoriaCor').value = '#4CAF50';
+            document.getElementById('categoriaCor').value = '#c4a747';
         }
         
         modal.style.display = 'block';
@@ -1778,7 +1845,7 @@ const Relatorios = {
         
         if (!vendas || vendas.length === 0) {
             ctx.font = '14px Arial';
-            ctx.fillStyle = '#8f9bae';
+            ctx.fillStyle = '#94a3b8';
             ctx.textAlign = 'center';
             ctx.fillText('Sem dados para exibir', ctx.canvas.width/2, ctx.canvas.height/2);
             return;

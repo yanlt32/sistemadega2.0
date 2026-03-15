@@ -40,6 +40,19 @@ const Gastos = {
         }
         
         document.querySelector('#modalGasto .close')?.addEventListener('click', () => this.fecharModal());
+        
+        // Fechar modal com clique fora
+        window.addEventListener('click', (e) => {
+            const modal = document.getElementById('modalGasto');
+            if (e.target === modal) {
+                this.fecharModal();
+            }
+            
+            const modalResumo = document.getElementById('modalResumo');
+            if (e.target === modalResumo) {
+                this.fecharModalResumo();
+            }
+        });
     },
     
     async carregarCategorias() {
@@ -61,6 +74,7 @@ const Gastos = {
             }
         } catch (error) {
             console.error('Erro ao carregar categorias:', error);
+            Notificacao.mostrar('Erro ao carregar categorias', 'danger');
         }
     },
     
@@ -101,7 +115,9 @@ const Gastos = {
             
         } catch (error) {
             console.error('Erro ao carregar gastos:', error);
-            Notificacao.mostrar('Erro ao carregar gastos', 'danger');
+            if (window.Notificacao) {
+                Notificacao.mostrar('Erro ao carregar gastos', 'danger');
+            }
         } finally {
             UI.hideLoading();
         }
@@ -136,8 +152,10 @@ const Gastos = {
                 <td><strong style="color: var(--danger);">${UI.formatCurrency(g.valor)}</strong></td>
                 <td>${g.forma_pagamento_nome || '-'}</td>
                 <td>
-                    <button class="btn btn-primary btn-sm" onclick="Gastos.editar(${g.id})">✏️</button>
-                    <button class="btn btn-danger btn-sm" onclick="Gastos.excluir(${g.id})">🗑️</button>
+                    <div style="display: flex; gap: 5px;">
+                        <button class="btn btn-primary btn-sm" onclick="Gastos.editar(${g.id})" title="Editar">✏️</button>
+                        <button class="btn btn-danger btn-sm" onclick="Gastos.excluir(${g.id})" title="Excluir">🗑️</button>
+                    </div>
                 </td>
             </tr>
         `).join('');
@@ -179,9 +197,14 @@ const Gastos = {
     },
     
     aplicarFiltros() {
-        this.filtros.mes = document.getElementById('filtroMes').value;
-        this.filtros.ano = document.getElementById('filtroAno').value;
-        this.filtros.categoria = document.getElementById('filtroCategoria').value;
+        const mesSelect = document.getElementById('filtroMes');
+        const anoInput = document.getElementById('filtroAno');
+        const categoriaSelect = document.getElementById('filtroCategoria');
+        
+        this.filtros.mes = mesSelect ? mesSelect.value : new Date().getMonth() + 1;
+        this.filtros.ano = anoInput ? anoInput.value : new Date().getFullYear();
+        this.filtros.categoria = categoriaSelect ? categoriaSelect.value : '';
+        
         this.paginaAtual = 1;
         this.carregarGastos();
         this.carregarResumoRapido();
@@ -193,9 +216,15 @@ const Gastos = {
             ano: new Date().getFullYear(),
             categoria: ''
         };
-        document.getElementById('filtroMes').value = this.filtros.mes;
-        document.getElementById('filtroAno').value = this.filtros.ano;
-        document.getElementById('filtroCategoria').value = '';
+        
+        const mesSelect = document.getElementById('filtroMes');
+        const anoInput = document.getElementById('filtroAno');
+        const categoriaSelect = document.getElementById('filtroCategoria');
+        
+        if (mesSelect) mesSelect.value = this.filtros.mes;
+        if (anoInput) anoInput.value = this.filtros.ano;
+        if (categoriaSelect) categoriaSelect.value = '';
+        
         this.paginaAtual = 1;
         this.carregarGastos();
         this.carregarResumoRapido();
@@ -208,13 +237,26 @@ const Gastos = {
                 ano: this.filtros.ano
             });
             
-            document.getElementById('gastosMes').textContent = UI.formatCurrency(resumo.gastos?.total || 0);
-            document.getElementById('qtdGastos').textContent = resumo.gastos?.quantidade || 0;
+            const gastosMesEl = document.getElementById('gastosMes');
+            const qtdGastosEl = document.getElementById('qtdGastos');
+            const maiorGastoEl = document.getElementById('maiorGasto');
+            
+            if (gastosMesEl) {
+                gastosMesEl.textContent = UI.formatCurrency(resumo.gastos?.total || 0);
+            }
+            
+            if (qtdGastosEl) {
+                qtdGastosEl.textContent = resumo.gastos?.quantidade || 0;
+            }
             
             // Calcular maior gasto
             if (resumo.gastos?.por_categoria?.length) {
                 const maior = Math.max(...resumo.gastos.por_categoria.map(c => c.total));
-                document.getElementById('maiorGasto').textContent = UI.formatCurrency(maior);
+                if (maiorGastoEl) {
+                    maiorGastoEl.textContent = UI.formatCurrency(maior);
+                }
+            } else if (maiorGastoEl) {
+                maiorGastoEl.textContent = UI.formatCurrency(0);
             }
             
         } catch (error) {
@@ -228,13 +270,15 @@ const Gastos = {
         const modal = document.getElementById('modalGasto');
         const titulo = document.getElementById('modalTitulo');
         
+        if (!modal || !titulo) return;
+        
         titulo.textContent = gasto ? '✏️ Editar Gasto' : '➕ Novo Gasto';
         
         if (gasto) {
-            document.getElementById('gastoId').value = gasto.id;
-            document.getElementById('gastoDescricao').value = gasto.descricao;
-            document.getElementById('gastoValor').value = gasto.valor;
-            document.getElementById('gastoData').value = gasto.data_gasto?.split('T')[0];
+            document.getElementById('gastoId').value = gasto.id || '';
+            document.getElementById('gastoDescricao').value = gasto.descricao || '';
+            document.getElementById('gastoValor').value = gasto.valor || '';
+            document.getElementById('gastoData').value = gasto.data_gasto?.split('T')[0] || '';
             document.getElementById('gastoCategoria').value = gasto.categoria_id || '';
             document.getElementById('gastoPagamento').value = gasto.forma_pagamento_id || '';
             document.getElementById('gastoObservacao').value = gasto.observacao || '';
@@ -247,8 +291,11 @@ const Gastos = {
     },
     
     fecharModal() {
-        document.getElementById('modalGasto').style.display = 'none';
-        this.gastoEditando = null;
+        const modal = document.getElementById('modalGasto');
+        if (modal) {
+            modal.style.display = 'none';
+            this.gastoEditando = null;
+        }
     },
     
     async salvar() {
@@ -256,12 +303,12 @@ const Gastos = {
             UI.showLoading();
             
             const gasto = {
-                descricao: document.getElementById('gastoDescricao').value,
-                valor: parseFloat(document.getElementById('gastoValor').value),
-                data_gasto: document.getElementById('gastoData').value,
-                categoria_id: document.getElementById('gastoCategoria').value,
-                forma_pagamento_id: document.getElementById('gastoPagamento').value || null,
-                observacao: document.getElementById('gastoObservacao').value
+                descricao: document.getElementById('gastoDescricao')?.value,
+                valor: parseFloat(document.getElementById('gastoValor')?.value),
+                data_gasto: document.getElementById('gastoData')?.value,
+                categoria_id: document.getElementById('gastoCategoria')?.value,
+                forma_pagamento_id: document.getElementById('gastoPagamento')?.value || null,
+                observacao: document.getElementById('gastoObservacao')?.value
             };
             
             if (!gasto.descricao) throw new Error('Descrição é obrigatória');
@@ -270,10 +317,14 @@ const Gastos = {
             
             if (this.gastoEditando) {
                 await API.atualizarGasto(this.gastoEditando.id, gasto);
-                Notificacao.mostrar('Gasto atualizado!', 'success');
+                if (window.Notificacao) {
+                    Notificacao.mostrar('Gasto atualizado!', 'success');
+                }
             } else {
                 await API.criarGasto(gasto);
-                Notificacao.mostrar('Gasto registrado!', 'success');
+                if (window.Notificacao) {
+                    Notificacao.mostrar('Gasto registrado!', 'success');
+                }
             }
             
             this.fecharModal();
@@ -281,7 +332,12 @@ const Gastos = {
             await this.carregarResumoRapido();
             
         } catch (error) {
-            Notificacao.mostrar(error.message, 'danger');
+            console.error('Erro ao salvar:', error);
+            if (window.Notificacao) {
+                Notificacao.mostrar(error.message, 'danger');
+            } else {
+                alert(error.message);
+            }
         } finally {
             UI.hideLoading();
         }
@@ -290,14 +346,36 @@ const Gastos = {
     async editar(id) {
         try {
             UI.showLoading();
-            const gasto = await API.buscarGasto?.(id) || 
-                (await API.listarGastos({ id })).gastos?.find(g => g.id === id);
+            
+            // Tentar buscar o gasto específico
+            let gasto = null;
+            
+            if (API.buscarGasto) {
+                try {
+                    gasto = await API.buscarGasto(id);
+                } catch (e) {
+                    console.log('Erro ao buscar gasto específico, tentando listar...');
+                }
+            }
+            
+            // Se não conseguiu buscar específico, buscar na lista
+            if (!gasto) {
+                const data = await API.listarGastos({ id });
+                gasto = data.gastos?.find(g => g.id === id);
+            }
             
             if (gasto) {
                 this.abrirModal(gasto);
+            } else {
+                throw new Error('Gasto não encontrado');
             }
         } catch (error) {
-            Notificacao.mostrar('Erro ao carregar gasto', 'danger');
+            console.error('Erro ao carregar gasto:', error);
+            if (window.Notificacao) {
+                Notificacao.mostrar('Erro ao carregar gasto', 'danger');
+            } else {
+                alert('Erro ao carregar gasto');
+            }
         } finally {
             UI.hideLoading();
         }
@@ -309,11 +387,22 @@ const Gastos = {
         try {
             UI.showLoading();
             await API.excluirGasto(id);
-            Notificacao.mostrar('Gasto excluído!', 'success');
+            
+            if (window.Notificacao) {
+                Notificacao.mostrar('Gasto excluído!', 'success');
+            } else {
+                alert('Gasto excluído!');
+            }
+            
             await this.carregarGastos();
             await this.carregarResumoRapido();
         } catch (error) {
-            Notificacao.mostrar(error.message, 'danger');
+            console.error('Erro ao excluir:', error);
+            if (window.Notificacao) {
+                Notificacao.mostrar(error.message, 'danger');
+            } else {
+                alert(error.message);
+            }
         } finally {
             UI.hideLoading();
         }
@@ -321,24 +410,33 @@ const Gastos = {
     
     abrirModalResumo() {
         const modal = document.getElementById('modalResumo');
-        modal.style.display = 'block';
-        this.carregarResumo();
+        if (modal) {
+            modal.style.display = 'block';
+            this.carregarResumo();
+        }
     },
     
     fecharModalResumo() {
-        document.getElementById('modalResumo').style.display = 'none';
+        const modal = document.getElementById('modalResumo');
+        if (modal) {
+            modal.style.display = 'none';
+        }
     },
     
     async carregarResumo() {
         try {
             UI.showLoading();
             
-            const mes = document.getElementById('resumoMes').value;
-            const ano = document.getElementById('resumoAno').value;
+            const mesSelect = document.getElementById('resumoMes');
+            const anoInput = document.getElementById('resumoAno');
+            
+            const mes = mesSelect ? mesSelect.value : new Date().getMonth() + 1;
+            const ano = anoInput ? anoInput.value : new Date().getFullYear();
             
             const resumo = await API.resumoMensal({ mes, ano });
             
             const container = document.getElementById('resumoConteudo');
+            if (!container) return;
             
             container.innerHTML = `
                 <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 20px;">
@@ -364,29 +462,37 @@ const Gastos = {
                 </div>
                 
                 <h3>Gastos por Categoria</h3>
-                <div style="max-height: 300px; overflow-y: auto;">
-                    ${resumo.gastos?.por_categoria?.map(c => `
-                        <div style="display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid var(--border-color);">
-                            <span>${c.categoria || 'Sem categoria'}</span>
-                            <span style="color: var(--danger);">${UI.formatCurrency(c.total)}</span>
-                        </div>
-                    `).join('') || '<p>Nenhum gasto no período</p>'}
+                <div style="max-height: 300px; overflow-y: auto; margin-bottom: 20px;">
+                    ${resumo.gastos?.por_categoria?.length > 0 ? 
+                        resumo.gastos.por_categoria.map(c => `
+                            <div style="display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid var(--border-color);">
+                                <span>${c.categoria || 'Sem categoria'}</span>
+                                <span style="color: var(--danger);">${UI.formatCurrency(c.total)}</span>
+                            </div>
+                        `).join('') 
+                        : '<p style="text-align: center; padding: 20px;">Nenhum gasto no período</p>'}
                 </div>
                 
-                <h3 style="margin-top: 20px;">Vendas por Pagamento</h3>
+                <h3>Vendas por Pagamento</h3>
                 <div style="max-height: 300px; overflow-y: auto;">
-                    ${resumo.vendas_por_pagamento?.map(v => `
-                        <div style="display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid var(--border-color);">
-                            <span>${v.forma_pagamento || 'Sem informação'}</span>
-                            <span style="color: var(--accent-primary);">${UI.formatCurrency(v.total)}</span>
-                        </div>
-                    `).join('') || '<p>Nenhuma venda no período</p>'}
+                    ${resumo.vendas_por_pagamento?.length > 0 ? 
+                        resumo.vendas_por_pagamento.map(v => `
+                            <div style="display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid var(--border-color);">
+                                <span>${v.forma_pagamento || 'Sem informação'}</span>
+                                <span style="color: var(--accent-primary);">${UI.formatCurrency(v.total)}</span>
+                            </div>
+                        `).join('') 
+                        : '<p style="text-align: center; padding: 20px;">Nenhuma venda no período</p>'}
                 </div>
             `;
             
         } catch (error) {
             console.error('Erro ao carregar resumo:', error);
-            Notificacao.mostrar('Erro ao carregar resumo', 'danger');
+            if (window.Notificacao) {
+                Notificacao.mostrar('Erro ao carregar resumo', 'danger');
+            } else {
+                alert('Erro ao carregar resumo');
+            }
         } finally {
             UI.hideLoading();
         }
@@ -395,10 +501,19 @@ const Gastos = {
     exportarExcel() {
         const mes = this.filtros.mes;
         const ano = this.filtros.ano;
-        // Usar o método correto da API
-        const url = `${API.baseURL}/gastos/exportar/resumo?mes=${mes}&ano=${ano}&token=${API.getToken()}`;
-        API.exportarResumo({ mes, ano });
-        Notificacao.mostrar('Exportando relatório...', 'info');
+        
+        // CORREÇÃO: Usar a rota correta para exportação
+        const token = API.getToken();
+        const url = `${API.baseURL}/exportar/resumo-gastos?mes=${mes}&ano=${ano}&token=${token}`;
+        
+        // Abrir em nova aba para download
+        window.open(url, '_blank');
+        
+        if (window.Notificacao) {
+            Notificacao.mostrar('Exportando relatório...', 'info', 2000);
+        } else {
+            alert('Exportando relatório...');
+        }
     }
 };
 
@@ -407,4 +522,4 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.location.pathname.includes('gastos.html')) {
         Gastos.init();
     }
-}); 
+});

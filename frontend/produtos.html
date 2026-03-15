@@ -2,8 +2,8 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Produtos - Adega System</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes" />
+    <title>Produtos - PodPá</title>
     <link rel="stylesheet" href="/css/style.css" />
     <!-- Fonte Inter para melhor aparência -->
     <link
@@ -48,6 +48,7 @@
           <h1>Produtos</h1>
           <div class="user-info">
             <span id="userNome"></span>
+            <span id="userRole" class="badge"></span>
             <button class="logout-btn" id="logoutBtn">Sair</button>
           </div>
         </div>
@@ -87,6 +88,7 @@
                   <th>Preço Custo</th>
                   <th>Preço Venda</th>
                   <th>Estoque</th>
+                  <th>Código Barras</th>
                   <th>Ações</th>
                 </tr>
               </thead>
@@ -162,6 +164,28 @@
             <input type="number" id="produtoQuantidade" min="0" value="0" />
           </div>
 
+          <!-- NOVO CAMPO: Código de Barras -->
+          <div class="form-group">
+            <label for="produtoCodigoBarras">Código de Barras</label>
+            <div style="display: flex; gap: 10px;">
+              <input
+                type="text"
+                id="produtoCodigoBarras"
+                placeholder="Digite ou leia o código"
+                style="flex: 1;"
+              />
+              <button
+                type="button"
+                class="btn btn-primary"
+                id="btnLerCodigoProduto"
+                style="width: 50px; display: flex; align-items: center; justify-content: center;"
+                title="Ler código de barras"
+              >
+                📷
+              </button>
+            </div>
+          </div>
+
           <div style="display: flex; gap: 10px; justify-content: flex-end">
             <button
               type="button"
@@ -182,6 +206,8 @@
     <script src="/js/app.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/realtime.js"></script>
+    <script src="/js/barcode-reader.js"></script>
+    
     <script>
     // Menu Hambúrguer para mobile
     document.addEventListener('DOMContentLoaded', function() {
@@ -224,6 +250,6 @@
             });
         });
     });
-</script>
+    </script>
   </body>
 </html>
