@@ -17,13 +17,11 @@ router.delete('/:id', isAdmin, gastoController.excluir);
 // Categorias de gastos
 router.get('/categorias/listar', isAdmin, gastoController.listarCategorias);
 router.post('/categorias', isAdmin, gastoController.criarCategoria);
-router.delete('/categorias/:id', isAdmin, gastoController.excluirCategoria);
 
-// Formas de pagamento - CORRIGIDO: caminho correto
+// Formas de pagamento
 router.get('/formas-pagamento', isAdmin, gastoController.listarFormasPagamento);
 
 // Resumo mensal
 router.get('/resumo/mensal', isAdmin, gastoController.resumoMensal);
-router.get('/exportar/resumo', isAdmin, gastoController.exportarResumo);
 
 module.exports = router;

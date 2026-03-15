@@ -1614,3 +1614,68 @@ tr:hover td {
         font-size: 16px !important;
     }
 }
+/* ===== ESTILOS MOBILE ===== */
+@media (max-width: 768px) {
+    .menu-toggle {
+        display: flex;
+    }
+    
+    .sidebar {
+        transform: translateX(-100%);
+    }
+    
+    .sidebar.active {
+        transform: translateX(0);
+    }
+    
+    .main-content {
+        margin-left: 0;
+        padding: 15px;
+        padding-top: 70px;
+    }
+    
+    .top-bar {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+    
+    .user-info {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .cards-container,
+    .dashboard-stats {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .search-bar {
+        flex-direction: column;
+    }
+    
+    .search-bar select {
+        width: 100%;
+    }
+    
+    .produtos-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 10px;
+    }
+    
+    .btn-finalizar {
+        flex: 2;
+    }
+    
+    .btn-limpar {
+        flex: 1;
+    }
+    
+    .table-container {
+        overflow-x: auto;
+    }
+    
+    table {
+        min-width: 500px;
+    }
+}

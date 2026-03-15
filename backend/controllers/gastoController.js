@@ -214,12 +214,27 @@ const gastoController = {
     excluirCategoria: (req, res) => {
         const { id } = req.params;
 
-        db.run('DELETE FROM categorias_gastos WHERE id = ?', [id], function(err) {
+        // Verificar se existem gastos usando esta categoria
+        db.get('SELECT COUNT(*) as count FROM gastos WHERE categoria_id = ?', [id], (err, result) => {
             if (err) {
-                console.error('Erro ao excluir categoria:', err);
+                console.error('Erro ao verificar gastos:', err);
                 return res.status(500).json({ error: err.message });
             }
-            res.json({ message: 'Categoria excluída com sucesso' });
+
+            if (result.count > 0) {
+                return res.status(400).json({ 
+                    error: 'Não é possível excluir categoria com gastos vinculados',
+                    quantidade: result.count 
+                });
+            }
+
+            db.run('DELETE FROM categorias_gastos WHERE id = ?', [id], function(err) {
+                if (err) {
+                    console.error('Erro ao excluir categoria:', err);
+                    return res.status(500).json({ error: err.message });
+                }
+                res.json({ message: 'Categoria excluída com sucesso' });
+            });
         });
     },
 
@@ -467,6 +482,28 @@ const gastoController = {
                     usuario: g.usuario || 'Sistema'
                 });
             });
+
+            // Estilizar cabeçalhos
+            sheetResumo.getRow(1).font = { bold: true, size: 14 };
+            sheetResumo.getRow(1).fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FFc4a747' }
+            };
+
+            sheetVendas.getRow(1).font = { bold: true };
+            sheetVendas.getRow(1).fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FFc4a747' }
+            };
+
+            sheetGastos.getRow(1).font = { bold: true };
+            sheetGastos.getRow(1).fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FFc4a747' }
+            };
 
             res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
             res.setHeader('Content-Disposition', `attachment; filename=resumo_${mesAtual}_${anoAtual}.xlsx`);
