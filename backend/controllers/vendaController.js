@@ -53,7 +53,6 @@ const vendaController = {
                 db.serialize(() => {
                     db.run('BEGIN TRANSACTION');
 
-                    // Usando apenas forma_pagamento (texto simples)
                     db.run(
                         `INSERT INTO vendas (total, lucro, forma_pagamento, usuario_id, status, observacao) 
                          VALUES (?, ?, ?, ?, 'concluida', ?)`,
@@ -163,10 +162,27 @@ const vendaController = {
                 return res.status(500).json({ error: err.message });
             }
 
-            res.json({
-                vendas: vendas || [],
-                pagina: parseInt(pagina),
-                total: vendas?.length || 0
+            // Contar total para paginação
+            let countQuery = 'SELECT COUNT(*) as total FROM vendas WHERE 1=1';
+            let countParams = [];
+
+            if (data_inicio && data_fim) {
+                countQuery += ' AND DATE(data_venda) BETWEEN DATE(?) AND DATE(?)';
+                countParams.push(data_inicio, data_fim);
+            }
+
+            db.get(countQuery, countParams, (err, total) => {
+                if (err) {
+                    console.error('Erro ao contar vendas:', err);
+                    return res.status(500).json({ error: err.message });
+                }
+
+                res.json({
+                    vendas: vendas || [],
+                    total: total?.total || 0,
+                    pagina: parseInt(pagina),
+                    totalPaginas: Math.ceil((total?.total || 0) / limite)
+                });
             });
         });
     },
@@ -217,7 +233,7 @@ const vendaController = {
 
         db.all('SELECT * FROM itens_venda WHERE venda_id = ?', [id], (err, itens) => {
             if (err) {
-                console.error('Erro ao buscar itens:', err);
+                console.error('Erro ao buscar itens da venda:', err);
                 return res.status(500).json({ error: err.message });
             }
 
@@ -246,6 +262,14 @@ const vendaController = {
                     }
 
                     db.run('COMMIT');
+                    
+                    if (req.io) {
+                        req.io.emit('venda:excluida', { 
+                            id,
+                            mensagem: `🗑️ Venda #${id} excluída!`
+                        });
+                    }
+
                     res.json({ message: 'Venda excluída com sucesso' });
                 });
             });

@@ -1,5 +1,3 @@
-const authController = require('../controllers/authController');
-
 // Middleware para verificar se é admin
 const isAdmin = (req, res, next) => {
     if (req.usuario && req.usuario.role === 'admin') {
