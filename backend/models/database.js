@@ -13,7 +13,6 @@ let dataDir;
 
 if (isProduction) {
     // Em produção (Render), usar o disco persistente montado
-    // O Render monta o disco em /opt/render/project/src/backend/data
     dataDir = '/opt/render/project/src/backend/data';
     console.log('🏭 Ambiente de produção detectado');
 } else {
@@ -56,6 +55,68 @@ function tableExists(tableName) {
         db.get(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, [tableName], (err, row) => {
             if (err) reject(err);
             else resolve(!!row);
+        });
+    });
+}
+
+// ============================================
+// FUNÇÃO PARA CORRIGIR A TABELA VENDAS
+// ============================================
+function migrarTabelaVendas() {
+    return new Promise((resolve, reject) => {
+        // Verificar colunas da tabela vendas
+        db.all("PRAGMA table_info(vendas)", (err, columns) => {
+            if (err) {
+                console.error('Erro ao verificar colunas:', err);
+                reject(err);
+                return;
+            }
+
+            console.log('📊 Verificando estrutura da tabela vendas...');
+            
+            const columnNames = columns.map(col => col.name);
+            console.log('📋 Colunas existentes:', columnNames.join(', '));
+            
+            // Verificar se a coluna forma_pagamento existe
+            if (!columnNames.includes('forma_pagamento')) {
+                console.log('➕ Adicionando coluna forma_pagamento...');
+                
+                db.run('ALTER TABLE vendas ADD COLUMN forma_pagamento TEXT', (err) => {
+                    if (err) {
+                        console.error('❌ Erro ao adicionar coluna:', err);
+                        reject(err);
+                    } else {
+                        console.log('✅ Coluna forma_pagamento adicionada com sucesso!');
+                        
+                        // Atualizar registros existentes copiando da coluna antiga
+                        if (columnNames.includes('forma_pagamento_text')) {
+                            db.run(`
+                                UPDATE vendas 
+                                SET forma_pagamento = forma_pagamento_text 
+                                WHERE forma_pagamento_text IS NOT NULL
+                            `, function(err) {
+                                if (err) {
+                                    console.error('❌ Erro ao copiar dados:', err);
+                                } else {
+                                    console.log(`📝 Dados copiados da coluna forma_pagamento_text`);
+                                }
+                                resolve();
+                            });
+                        } else {
+                            // Se não houver dados antigos, definir padrão
+                            db.run(`
+                                UPDATE vendas 
+                                SET forma_pagamento = 'Dinheiro' 
+                                WHERE forma_pagamento IS NULL
+                            `);
+                            resolve();
+                        }
+                    }
+                });
+            } else {
+                console.log('✅ Coluna forma_pagamento já existe');
+                resolve();
+            }
         });
     });
 }
@@ -230,6 +291,7 @@ function initializeDatabase() {
             lucro DECIMAL(10,2) NOT NULL,
             forma_pagamento_id INTEGER,
             forma_pagamento_text TEXT,
+            forma_pagamento TEXT,
             usuario_id INTEGER,
             status TEXT DEFAULT 'concluida',
             observacao TEXT,
@@ -374,7 +436,7 @@ async function criarUsuariosPadrao() {
         } else {
             console.log(`👥 ${result.total} usuários já existentes - mantidos`);
             
-            // Atualizar senha do admin para garantir (opcional)
+            // Atualizar senha do admin para garantir
             db.run(
                 'UPDATE usuarios SET password = ? WHERE username = ?',
                 [senhaAdmin, 'admin'],
@@ -444,6 +506,13 @@ console.log('=================================');
 
 // Inicializar estrutura
 initializeDatabase();
+
+// Executar migrações após criar as tabelas
+setTimeout(() => {
+    migrarTabelaVendas().catch(err => {
+        console.error('❌ Erro na migração:', err);
+    });
+}, 500);
 
 // Inserir dados padrão
 inserirDadosPadrao();
