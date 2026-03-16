@@ -4,6 +4,7 @@
 const DashboardAdmin = {
     charts: {},
     data: {},
+    refreshInterval: null,
     
     async init() {
         await Auth.checkAuth();
@@ -167,122 +168,159 @@ const DashboardAdmin = {
     },
     
     inicializarGraficos() {
-        // Destruir gráficos existentes
-        if (this.charts.vendas) {
-            this.charts.vendas.destroy();
-            this.charts.vendas = null;
+        // Destruir gráficos existentes com segurança
+        try {
+            if (this.charts.vendas) {
+                this.charts.vendas.destroy();
+                this.charts.vendas = null;
+            }
+        } catch (e) {
+            console.log('✅ Gráfico de vendas limpo');
         }
         
-        if (this.charts.produtos) {
-            this.charts.produtos.destroy();
-            this.charts.produtos = null;
+        try {
+            if (this.charts.produtos) {
+                this.charts.produtos.destroy();
+                this.charts.produtos = null;
+            }
+        } catch (e) {
+            console.log('✅ Gráfico de produtos limpo');
         }
         
+        // Limpar os canvases antes de criar novos
+        const canvasVendas = document.getElementById('graficoVendasSemana');
+        if (canvasVendas) {
+            const ctx = canvasVendas.getContext('2d');
+            ctx.clearRect(0, 0, canvasVendas.width, canvasVendas.height);
+        }
+        
+        const canvasProdutos = document.getElementById('graficoProdutos');
+        if (canvasProdutos) {
+            const ctx = canvasProdutos.getContext('2d');
+            ctx.clearRect(0, 0, canvasProdutos.width, canvasProdutos.height);
+        }
+        
+        // Pequeno timeout para garantir que os canvases foram limpos
+        setTimeout(() => {
+            this.criarGraficos();
+        }, 100);
+    },
+    
+    criarGraficos() {
         // Gráfico de Vendas por Dia
         const ctxVendas = document.getElementById('graficoVendasSemana');
         if (ctxVendas) {
-            this.charts.vendas = new Chart(ctxVendas, {
-                type: 'line',
-                data: {
-                    labels: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'],
-                    datasets: [{
-                        label: 'Vendas (R$)',
-                        data: [0, 0, 0, 0, 0, 0, 0],
-                        borderColor: '#c4a747',
-                        backgroundColor: 'rgba(196, 167, 71, 0.1)',
-                        borderWidth: 3,
-                        tension: 0.4,
-                        fill: true,
-                        pointBackgroundColor: '#c4a747',
-                        pointBorderColor: '#fff',
-                        pointBorderWidth: 2,
-                        pointRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: (context) => `Vendas: ${UI.formatCurrency(context.raw)}`
-                            }
-                        }
+            try {
+                this.charts.vendas = new Chart(ctxVendas, {
+                    type: 'line',
+                    data: {
+                        labels: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'],
+                        datasets: [{
+                            label: 'Vendas (R$)',
+                            data: this.data.vendasPeriodo.map(d => d.total),
+                            borderColor: '#c4a747',
+                            backgroundColor: 'rgba(196, 167, 71, 0.1)',
+                            borderWidth: 3,
+                            tension: 0.4,
+                            fill: true,
+                            pointBackgroundColor: '#c4a747',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2,
+                            pointRadius: 4
+                        }]
                     },
-                    scales: {
-                        y: {
-                            grid: { color: '#2d3540' },
-                            ticks: {
-                                color: '#94a3b8',
-                                callback: (value) => 'R$ ' + value
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => `Vendas: ${UI.formatCurrency(context.raw)}`
+                                }
                             }
                         },
-                        x: {
-                            grid: { display: false },
-                            ticks: { color: '#94a3b8' }
+                        scales: {
+                            y: {
+                                grid: { color: '#2d3540' },
+                                ticks: {
+                                    color: '#94a3b8',
+                                    callback: (value) => 'R$ ' + value
+                                }
+                            },
+                            x: {
+                                grid: { display: false },
+                                ticks: { color: '#94a3b8' }
+                            }
                         }
                     }
-                }
-            });
+                });
+            } catch (e) {
+                console.error('Erro ao criar gráfico de vendas:', e);
+            }
         }
         
         // Gráfico de Produtos Mais Vendidos
         const ctxProdutos = document.getElementById('graficoProdutos');
         if (ctxProdutos) {
-            this.charts.produtos = new Chart(ctxProdutos, {
-                type: 'bar',
-                data: {
-                    labels: [],
-                    datasets: [{
-                        label: 'Quantidade Vendida',
-                        data: [],
-                        backgroundColor: '#c4a747',
-                        borderRadius: 6
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: (context) => `${context.raw} unidades`
-                            }
-                        }
+            try {
+                this.charts.produtos = new Chart(ctxProdutos, {
+                    type: 'bar',
+                    data: {
+                        labels: this.data.produtosMaisVendidos.map(p => 
+                            p.nome.length > 10 ? p.nome.substring(0, 10) + '...' : p.nome
+                        ),
+                        datasets: [{
+                            label: 'Quantidade Vendida',
+                            data: this.data.produtosMaisVendidos.map(p => p.quantidade),
+                            backgroundColor: '#c4a747',
+                            borderRadius: 6
+                        }]
                     },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: { color: '#2d3540' },
-                            ticks: {
-                                color: '#94a3b8',
-                                stepSize: 1
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => `${context.raw} unidades`
+                                }
                             }
                         },
-                        x: {
-                            grid: { display: false },
-                            ticks: { 
-                                color: '#94a3b8',
-                                maxRotation: 45,
-                                minRotation: 45
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: { color: '#2d3540' },
+                                ticks: {
+                                    color: '#94a3b8',
+                                    stepSize: 1
+                                }
+                            },
+                            x: {
+                                grid: { display: false },
+                                ticks: { 
+                                    color: '#94a3b8',
+                                    maxRotation: 45,
+                                    minRotation: 45
+                                }
                             }
                         }
                     }
-                }
-            });
+                });
+            } catch (e) {
+                console.error('Erro ao criar gráfico de produtos:', e);
+            }
         }
     },
     
     atualizarGraficos() {
-        // Atualizar gráfico de vendas
+        // Verificar se os gráficos existem e atualizar
         if (this.charts.vendas && this.data.vendasPeriodo.length > 0) {
             this.charts.vendas.data.datasets[0].data = this.data.vendasPeriodo.map(d => d.total);
             this.charts.vendas.update();
         }
         
-        // Atualizar gráfico de produtos mais vendidos
         if (this.charts.produtos && this.data.produtosMaisVendidos.length > 0) {
             this.charts.produtos.data.labels = this.data.produtosMaisVendidos.map(p => 
                 p.nome.length > 10 ? p.nome.substring(0, 10) + '...' : p.nome
@@ -328,20 +366,23 @@ const DashboardAdmin = {
             container.innerHTML = `
                 <div style="padding: 10px;">
                     ${top3.map((p, index) => `
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: ${index < top3.length-1 ? '1px solid var(--border-color)' : 'none'};">
-                            <div>
-                                <span style="color: var(--accent-primary); font-weight: bold; margin-right: 8px;">${index+1}º</span>
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: ${index < top3.length-1 ? '1px solid var(--border-color)' : 'none'};">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="color: var(--accent-primary); font-weight: bold; font-size: 16px;">${index+1}º</span>
                                 <strong style="color: var(--text-primary);">${p.nome}</strong>
                             </div>
-                            <span style="color: var(--text-muted); background: var(--bg-tertiary); padding: 4px 8px; border-radius: 12px;">${p.quantidade} vendidos</span>
+                            <span style="color: var(--text-muted); background: var(--bg-tertiary); padding: 4px 10px; border-radius: 20px; font-size: 13px;">
+                                ${p.quantidade} vendidos
+                            </span>
                         </div>
                     `).join('')}
                 </div>
             `;
         } else {
             container.innerHTML = `
-                <div style="color: var(--text-muted); text-align: center; padding: 20px;">
-                    Nenhuma venda registrada ainda
+                <div style="color: var(--text-muted); text-align: center; padding: 30px;">
+                    <div style="font-size: 48px; margin-bottom: 10px;">📊</div>
+                    <p>Nenhuma venda registrada ainda</p>
                 </div>
             `;
         }
@@ -352,32 +393,67 @@ const DashboardAdmin = {
         if (!tbody) return;
         
         if (!this.data.ultimasVendas || this.data.ultimasVendas.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">Nenhuma venda recente</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 30px;">Nenhuma venda recente</td></tr>';
             return;
         }
         
         tbody.innerHTML = this.data.ultimasVendas.slice(0, 5).map(v => `
             <tr>
-                <td>#${v.id}</td>
+                <td style="font-weight: 500;">#${v.id}</td>
                 <td>${new Date(v.data_venda).toLocaleString('pt-BR')}</td>
-                <td>${UI.formatCurrency(v.total)}</td>
-                <td><span class="badge badge-success">${v.forma_pagamento || 'N/A'}</span></td>
+                <td style="color: var(--accent-primary); font-weight: 600;">${UI.formatCurrency(v.total)}</td>
+                <td><span class="badge badge-success" style="padding: 4px 12px;">${v.forma_pagamento || 'N/A'}</span></td>
             </tr>
         `).join('');
     },
     
     configurarAtualizacao() {
-        setInterval(() => {
+        // Limpar intervalo anterior se existir
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+        }
+        
+        // Atualizar a cada 30 segundos
+        this.refreshInterval = setInterval(() => {
             if (document.visibilityState === 'visible') {
                 this.carregarDados();
             }
         }, 30000);
+    },
+    
+    // Função para destruir o componente (útil para trocar de página)
+    destroy() {
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+            this.refreshInterval = null;
+        }
+        
+        try {
+            if (this.charts.vendas) {
+                this.charts.vendas.destroy();
+                this.charts.vendas = null;
+            }
+        } catch (e) {}
+        
+        try {
+            if (this.charts.produtos) {
+                this.charts.produtos.destroy();
+                this.charts.produtos = null;
+            }
+        } catch (e) {}
     }
 };
 
 // Inicializar quando a página carregar
 document.addEventListener('DOMContentLoaded', () => {
     if (window.location.pathname.includes('dashboard.html')) {
+        // Garantir que qualquer instância anterior seja destruída
+        if (window.DashboardAdmin) {
+            window.DashboardAdmin.destroy?.();
+        }
         DashboardAdmin.init();
     }
 });
+
+// Exportar para uso global
+window.DashboardAdmin = DashboardAdmin;
