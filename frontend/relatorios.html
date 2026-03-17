@@ -1,131 +1,229 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Relatórios - Adega System</title>
-    <link rel="stylesheet" href="/css/style.css" />
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatórios - PodPá</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/style-mobile.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  </head>
-  <body>
+</head>
+<body>
     <div class="dashboard-container">
-      <aside class="sidebar">
-        <div class="sidebar-header">
-          <h3>PODPÁ</h3>
-        </div>
-        <ul class="sidebar-menu">
-          <li onclick="window.location.href = '/dashboard.html'">
-            <i>📊</i> <span>Dashboard</span>
-          </li>
-          <li onclick="window.location.href = '/produtos.html'">
-            <i>📦</i> <span>Produtos</span>
-          </li>
-          <li onclick="window.location.href = '/vendas.html'">
-            <i>💰</i> <span>Vendas</span>
-          </li>
-          <li onclick="window.location.href = '/categorias.html'">
-            <i>🏷️</i> <span>Categorias</span>
-          </li>
-          <li class="active"><i>📈</i> <span>Relatórios</span></li>
-          <li onclick="window.location.href = '/historico-vendas.html'">
-            <i>📋</i> <span>Histórico</span>
-          </li>
-                    <li onclick="window.location.href = '/gastos.html'">
-            💸 <span>Gastos</span>
-          </li>
-          <li onclick="window.location.href = '/financeiro.html'">
-            📈 <span>Financeiro</span>
-          </li>
-        </ul>
-      </aside>
-
-      <main class="main-content">
-        <div class="top-bar">
-          <h1>Relatórios</h1>
-          <div class="user-info">
-            <span id="userNome"></span>
-            <button class="logout-btn" id="logoutBtn">Sair</button>
-          </div>
-        </div>
-
-        <div class="cards-container">
-          <div class="card">
-            <h3>Lucro Hoje</h3>
-            <div class="value" id="lucroDiarioValor">R$ 0,00</div>
-          </div>
-
-          <div class="card">
-            <h3>Lucro do Mês</h3>
-            <div class="value" id="lucroMensalValor">R$ 0,00</div>
-          </div>
-        </div>
-
-        <div class="cards-container">
-          <div class="card">
-            <h3>Produto Mais Vendido</h3>
-            <div id="produtoMaisVendido">
-              <p>Carregando...</p>
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="company-logo">
+                    <img src="/assets/logo.png" alt="PodPá Logo" onerror="this.style.display='none'">
+                    <h2>PODPÁ</h2>
+                </div>
             </div>
-          </div>
-
-          <div class="card">
-            <h3>Categoria Mais Vendida</h3>
-            <div id="categoriaMaisVendida">
-              <p>Carregando...</p>
+           <ul class="sidebar-menu">
+                <li onclick="window.location.href='/dashboard.html'">📊 <span>Dashboard</span></li>
+                <li onclick="window.location.href='/produtos.html'">📦 <span>Produtos</span></li>
+                <li onclick="window.location.href='/vendas.html'">💰 <span>Vendas</span></li>
+                <li onclick="window.location.href='/historico-vendas.html'">📋 <span>Histórico</span></li>
+                <li onclick="window.location.href='/categorias.html'">🏷️ <span>Categorias</span></li>
+                <li onclick="window.location.href='/caixa.html'">💵 <span>Caixa</span></li>
+                <li onclick="window.location.href='/gastos.html'">💸 <span>Gastos</span></li>
+                <li onclick="window.location.href='/financeiro.html'">📈 <span>Financeiro</span></li>
+                <li class="active">📊 <span>Relatórios</span></li>
+        </aside>
+        
+        <main class="main-content">
+            <div class="top-bar">
+                <h1>Relatórios Profissionais</h1>
+                <div class="user-info">
+                    <span id="userNome"></span>
+                    <span id="userRole" class="badge"></span>
+                    <button class="logout-btn" id="logoutBtn">Sair</button>
+                </div>
             </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div
-            style="
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              margin-bottom: 20px;
-            "
-          >
-            <h3>Vendas por Período</h3>
-            <select id="periodoRelatorio">
-              <option value="dia">Por dia</option>
-              <option value="mes">Por mês</option>
-              <option value="ano">Por ano</option>
-            </select>
-          </div>
-
-          <div style="height: 300px; margin-bottom: 20px">
-            <canvas id="graficoRelatorio"></canvas>
-          </div>
-
-          <div class="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Período</th>
-                  <th>Qtd. Vendas</th>
-                  <th>Total</th>
-                  <th>Lucro</th>
-                </tr>
-              </thead>
-              <tbody id="tabelaVendasPeriodo"></tbody>
-            </table>
-          </div>
-        </div>
-      </main>
+            
+            <!-- Filtros -->
+            <div class="card" style="margin-bottom: 20px;">
+                <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                    <div>
+                        <label>Tipo:</label>
+                        <select id="tipoRelatorio" style="padding: 8px; margin-left: 10px;">
+                            <option value="diario">Diário</option>
+                            <option value="mensal" selected>Mensal</option>
+                            <option value="anual">Anual</option>
+                            <option value="personalizado">Personalizado</option>
+                        </select>
+                    </div>
+                    
+                    <div id="filtroData" style="display: flex; gap: 10px; align-items: center;">
+                        <div>
+                            <label>De:</label>
+                            <input type="date" id="dataInicio" style="padding: 8px; margin-left: 5px;">
+                        </div>
+                        <div>
+                            <label>Até:</label>
+                            <input type="date" id="dataFim" style="padding: 8px; margin-left: 5px;">
+                        </div>
+                    </div>
+                    
+                    <div id="filtroMesAno" style="display: none; gap: 10px; align-items: center;">
+                        <div>
+                            <label>Mês:</label>
+                            <select id="mesRelatorio" style="padding: 8px; margin-left: 5px;">
+                                <option value="1">Janeiro</option>
+                                <option value="2">Fevereiro</option>
+                                <option value="3">Março</option>
+                                <option value="4">Abril</option>
+                                <option value="5">Maio</option>
+                                <option value="6">Junho</option>
+                                <option value="7">Julho</option>
+                                <option value="8">Agosto</option>
+                                <option value="9">Setembro</option>
+                                <option value="10">Outubro</option>
+                                <option value="11">Novembro</option>
+                                <option value="12">Dezembro</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Ano:</label>
+                            <input type="number" id="anoRelatorio" value="2026" style="width: 100px; padding: 8px;">
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-primary" onclick="Relatorios.carregar()">Gerar Relatório</button>
+                    <button class="btn btn-warning" onclick="Relatorios.exportarPDF()">📥 Exportar PDF</button>
+                </div>
+            </div>
+            
+            <!-- Cards de Resumo -->
+            <div class="dashboard-stats">
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <h3>Total de Vendas</h3>
+                    </div>
+                    <div class="stat-value" id="totalVendas">R$ 0,00</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <h3>Lucro Total</h3>
+                    </div>
+                    <div class="stat-value" id="totalLucro">R$ 0,00</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <h3>Quantidade</h3>
+                    </div>
+                    <div class="stat-value" id="quantidadeVendas">0</div>
+                    <div class="stat-label">vendas</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <h3>Ticket Médio</h3>
+                    </div>
+                    <div class="stat-value" id="ticketMedio">R$ 0,00</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <h3>Margem de Lucro</h3>
+                    </div>
+                    <div class="stat-value" id="margemLucro">0%</div>
+                </div>
+            </div>
+            
+            <!-- Gráficos -->
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>Vendas por Dia</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="graficoVendasDia"></canvas>
+                    </div>
+                </div>
+                
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>Vendas por Pagamento</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="graficoPagamentos"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tabelas -->
+            <div class="quick-tables">
+                <div class="quick-table">
+                    <div class="quick-table-header">
+                        <h3>🏆 Produtos Mais Vendidos</h3>
+                    </div>
+                    <div class="table-container">
+                        <table id="tabelaProdutos">
+                            <thead>
+                                <tr>
+                                    <th>Produto</th>
+                                    <th>Qtd</th>
+                                    <th>Faturamento</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="quick-table">
+                    <div class="quick-table-header">
+                        <h3>📊 Categorias</h3>
+                    </div>
+                    <div class="table-container">
+                        <table id="tabelaCategorias">
+                            <thead>
+                                <tr>
+                                    <th>Categoria</th>
+                                    <th>Vendas</th>
+                                    <th>Faturamento</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Horários de Pico -->
+            <div class="quick-table">
+                <div class="quick-table-header">
+                    <h3>⏰ Horários de Pico</h3>
+                </div>
+                <div class="table-container">
+                    <table id="tabelaHorarios">
+                        <thead>
+                            <tr>
+                                <th>Hora</th>
+                                <th>Vendas</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
     </div>
-
+    
     <script src="/js/api.js"></script>
     <script src="/js/auth.js"></script>
     <script src="/js/app.js"></script>
-    <script src="/socket.io/socket.io.js"></script>
     <script src="/js/realtime.js"></script>
+    <script src="/js/relatorios.js"></script>
+    
     <script>
-    // Menu Hambúrguer para mobile
+    // Menu Hambúrguer
     document.addEventListener('DOMContentLoaded', function() {
         const menuToggle = document.createElement('button');
         menuToggle.className = 'menu-toggle';
         menuToggle.innerHTML = '☰';
-        menuToggle.setAttribute('aria-label', 'Abrir menu');
         
         const overlay = document.createElement('div');
         overlay.className = 'sidebar-overlay';
@@ -138,18 +236,15 @@
         menuToggle.addEventListener('click', function() {
             sidebar.classList.toggle('active');
             overlay.classList.toggle('active');
-            menuToggle.classList.toggle('active');
             menuToggle.innerHTML = sidebar.classList.contains('active') ? '✕' : '☰';
         });
         
         overlay.addEventListener('click', function() {
             sidebar.classList.remove('active');
             overlay.classList.remove('active');
-            menuToggle.classList.remove('active');
             menuToggle.innerHTML = '☰';
         });
         
-        // Fechar menu ao clicar em um item
         document.querySelectorAll('.sidebar-menu li').forEach(item => {
             item.addEventListener('click', function() {
                 if (window.innerWidth <= 768) {
@@ -161,6 +256,6 @@
             });
         });
     });
-</script>
-  </body>
+    </script>
+</body>
 </html>

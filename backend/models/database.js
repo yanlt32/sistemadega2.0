@@ -316,6 +316,21 @@ function initializeDatabase() {
             FOREIGN KEY (combo_id) REFERENCES combos(id)
         )`);
 
+        // ===== TABELA DE CAIXA (ADICIONADA) =====
+        db.run(`CREATE TABLE IF NOT EXISTS caixa (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            data_abertura DATETIME DEFAULT CURRENT_TIMESTAMP,
+            data_fechamento DATETIME,
+            valor_inicial DECIMAL(10,2) DEFAULT 0,
+            valor_final DECIMAL(10,2),
+            total_vendas DECIMAL(10,2) DEFAULT 0,
+            total_lucro DECIMAL(10,2) DEFAULT 0,
+            observacao TEXT,
+            status TEXT DEFAULT 'aberto',
+            usuario_id INTEGER,
+            FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+        )`);
+
         // ===== TABELAS DE CONFIGURAÇÃO =====
         
         // Criar tabela de configurações

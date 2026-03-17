@@ -4,13 +4,16 @@ const relatorioController = require('../controllers/relatorioController');
 const authMiddleware = require('../middleware/authMiddleware');
 const { isAdmin } = require('../middleware/permissaoMiddleware');
 
+// Todas as rotas requerem autenticação
 router.use(authMiddleware);
 
-// Apenas admin pode ver relatórios financeiros
+// Relatórios básicos
 router.get('/lucro-diario', isAdmin, relatorioController.lucroDiario);
 router.get('/lucro-mensal', isAdmin, relatorioController.lucroMensal);
-router.get('/produto-mais-vendido', isAdmin, relatorioController.produtoMaisVendido);
-router.get('/categoria-mais-vendida', isAdmin, relatorioController.categoriaMaisVendida);
-router.get('/vendas-por-periodo', isAdmin, relatorioController.vendasPorPeriodo);
+
+// Relatórios avançados
+router.get('/completo', isAdmin, relatorioController.relatorioCompleto);
+router.get('/mensal', isAdmin, relatorioController.relatorioMensalDetalhado);
+router.get('/anual', isAdmin, relatorioController.relatorioAnual);
 
 module.exports = router;

@@ -113,10 +113,15 @@ class App {
             return;
         }
         
-        // RELATÓRIOS - apenas admin
+        // RELATÓRIOS - apenas admin (USAR O MÓDULO EXTERNO)
         if (path.includes('relatorios.html')) {
             if (user?.role === 'admin') {
-                Relatorios.init();
+                // Verificar se o módulo externo existe, senão usar o interno
+                if (window.RelatoriosExternos) {
+                    window.RelatoriosExternos.init();
+                } else if (window.Relatorios) {
+                    window.Relatorios.init();
+                }
             } else {
                 window.location.href = '/vendas.html';
             }
@@ -143,7 +148,7 @@ class App {
             return;
         }
         
-        // CAIXA - apenas admin (funcionário só vê status)
+        // CAIXA - todos podem ver status
         if (path.includes('caixa.html')) {
             if (window.Caixa) Caixa.init();
             return;
@@ -1030,7 +1035,7 @@ const Vendas = {
         await this.carregarProdutos();
         this.setupEventListeners();
         this.atualizarCarrinho();
-        this.verificarCaixa(); // Verificar status do caixa
+        this.verificarCaixa();
     },
     
     async verificarCaixa() {
@@ -1039,19 +1044,16 @@ const Vendas = {
             const btnFinalizar = document.getElementById('btnFinalizarVenda');
             
             if (!status.aberto) {
-                // Caixa fechado - desabilitar botão
                 if (btnFinalizar) {
                     btnFinalizar.disabled = true;
                     btnFinalizar.style.opacity = '0.5';
                     btnFinalizar.title = 'Caixa fechado. Não é possível realizar vendas.';
                 }
                 
-                // Mostrar alerta para funcionário
                 if (Auth.isFuncionario()) {
                     this.mostrarAlertaCaixaFechado();
                 }
             } else {
-                // Caixa aberto - habilitar botão
                 if (btnFinalizar) {
                     btnFinalizar.disabled = false;
                     btnFinalizar.style.opacity = '1';
@@ -1064,7 +1066,6 @@ const Vendas = {
     },
     
     mostrarAlertaCaixaFechado() {
-        // Remover alerta antigo se existir
         const alertaAntigo = document.getElementById('alerta-caixa-fechado');
         if (alertaAntigo) alertaAntigo.remove();
         
@@ -1092,7 +1093,6 @@ const Vendas = {
         
         document.body.appendChild(alerta);
         
-        // Auto-remover após 10 segundos
         setTimeout(() => {
             if (alerta.parentNode) alerta.remove();
         }, 10000);
@@ -1132,7 +1132,6 @@ const Vendas = {
             });
         }
 
-        // Leitor de código de barras nas vendas
         const btnLerCodigo = document.getElementById('btnLerCodigo');
         if (btnLerCodigo) {
             btnLerCodigo.addEventListener('click', () => {
@@ -1161,7 +1160,6 @@ const Vendas = {
             });
         }
 
-        // Ouvir eventos de caixa via WebSocket
         if (window.Realtime && Realtime.socket) {
             Realtime.socket.on('caixa:aberto', () => {
                 this.verificarCaixa();
@@ -1465,7 +1463,6 @@ const Vendas = {
             this.formaPagamento = '';
             
         } catch (error) {
-            // Tratamento específico para caixa fechado
             if (error.message.includes('Caixa fechado') || error.message.includes('caixa fechado')) {
                 App.showNotification('❌ Caixa fechado! Não é possível realizar vendas.', 'danger');
                 this.mostrarAlertaCaixaFechado();
@@ -1595,7 +1592,7 @@ const CategoriasManager = {
         ).join('');
         
         if (select) {
-            select.innerHTML = options;
+            select.innerHTML = '<option value="">Selecione uma categoria</option>' + options;
         }
         
         if (filtro) {
@@ -1676,20 +1673,28 @@ const CategoriasManager = {
         try {
             UI.showLoading();
             
-            const categoria = {
-                nome: document.getElementById('categoriaNome')?.value,
-                tipo: document.getElementById('categoriaTipo')?.value,
-                cor: document.getElementById('categoriaCor')?.value
-            };
+            const nome = document.getElementById('categoriaNome')?.value?.trim();
+            let tipo = document.getElementById('categoriaTipo')?.value;
             
-            if (!categoria.nome) throw new Error('Nome é obrigatório');
+            if (!nome) throw new Error('Nome é obrigatório');
+            if (!tipo) throw new Error('Tipo é obrigatório');
+            
+            if (tipo === 'outro') {
+                const novoTipo = prompt('Digite o tipo da categoria (ex: cigarro, eletrônicos, etc):');
+                if (!novoTipo) throw new Error('Tipo é obrigatório');
+                tipo = novoTipo.toLowerCase().trim();
+            }
+            
+            const cor = document.getElementById('categoriaCor')?.value || '#c4a747';
+            
+            const categoria = { nome, tipo, cor };
             
             if (this.categoriaEditando) {
                 await API.atualizarCategoria(this.categoriaEditando.id, categoria);
-                App.showNotification('Categoria atualizada!', 'success');
+                App.showNotification('✅ Categoria atualizada!', 'success');
             } else {
                 await API.criarCategoria(categoria);
-                App.showNotification('Categoria criada!', 'success');
+                App.showNotification('✅ Categoria criada!', 'success');
             }
             
             document.getElementById('modalCategoria').style.display = 'none';
@@ -1697,7 +1702,14 @@ const CategoriasManager = {
             await this.carregarTipos();
             
         } catch (error) {
-            App.showNotification(error.message, 'danger');
+            console.error('Erro ao salvar categoria:', error);
+            
+            let mensagem = error.message;
+            if (error.message.includes('UNIQUE constraint')) {
+                mensagem = '❌ Já existe uma categoria com este nome!';
+            }
+            
+            App.showNotification(mensagem, 'danger');
         } finally {
             UI.hideLoading();
         }
@@ -1716,16 +1728,20 @@ const CategoriasManager = {
     },
     
     async excluirCategoria(id) {
-        if (!confirm('Tem certeza que deseja excluir esta categoria?')) return;
+        if (!confirm('⚠️ Tem certeza que deseja excluir esta categoria?')) return;
         
         try {
             UI.showLoading();
             await API.excluirCategoria(id);
-            App.showNotification('Categoria excluída!', 'success');
+            App.showNotification('✅ Categoria excluída!', 'success');
             await this.carregarCategorias();
             await this.carregarTipos();
         } catch (error) {
-            App.showNotification(error.message, 'danger');
+            let mensagem = error.message;
+            if (error.message.includes('produtos vinculados')) {
+                mensagem = '❌ Não é possível excluir categoria com produtos vinculados!';
+            }
+            App.showNotification(mensagem, 'danger');
         } finally {
             UI.hideLoading();
         }
@@ -1756,27 +1772,31 @@ const CategoriasManager = {
         try {
             UI.showLoading();
             
-            const tipo = {
-                nome: document.getElementById('tipoNome')?.value,
-                categoria_id: document.getElementById('tipoCategoria')?.value
-            };
+            const nome = document.getElementById('tipoNome')?.value?.trim();
+            const categoria_id = document.getElementById('tipoCategoria')?.value;
             
-            if (!tipo.nome) throw new Error('Nome é obrigatório');
-            if (!tipo.categoria_id) throw new Error('Categoria é obrigatória');
+            if (!nome) throw new Error('Nome é obrigatório');
+            if (!categoria_id) throw new Error('Categoria é obrigatória');
+            
+            const tipo = { nome, categoria_id };
             
             if (this.tipoEditando) {
                 await API.atualizarTipo(this.tipoEditando.id, tipo);
-                App.showNotification('Tipo atualizado!', 'success');
+                App.showNotification('✅ Tipo atualizado!', 'success');
             } else {
                 await API.criarTipo(tipo);
-                App.showNotification('Tipo criado!', 'success');
+                App.showNotification('✅ Tipo criado!', 'success');
             }
             
             document.getElementById('modalTipo').style.display = 'none';
             await this.carregarTipos();
             
         } catch (error) {
-            App.showNotification(error.message, 'danger');
+            let mensagem = error.message;
+            if (error.message.includes('UNIQUE constraint')) {
+                mensagem = '❌ Já existe um tipo com este nome nesta categoria!';
+            }
+            App.showNotification(mensagem, 'danger');
         } finally {
             UI.hideLoading();
         }
@@ -1795,15 +1815,19 @@ const CategoriasManager = {
     },
     
     async excluirTipo(id) {
-        if (!confirm('Tem certeza que deseja excluir este tipo?')) return;
+        if (!confirm('⚠️ Tem certeza que deseja excluir este tipo?')) return;
         
         try {
             UI.showLoading();
             await API.excluirTipo(id);
-            App.showNotification('Tipo excluído!', 'success');
+            App.showNotification('✅ Tipo excluído!', 'success');
             await this.carregarTipos();
         } catch (error) {
-            App.showNotification(error.message, 'danger');
+            let mensagem = error.message;
+            if (error.message.includes('produtos vinculados')) {
+                mensagem = '❌ Não é possível excluir tipo com produtos vinculados!';
+            }
+            App.showNotification(mensagem, 'danger');
         } finally {
             UI.hideLoading();
         }
@@ -1811,7 +1835,7 @@ const CategoriasManager = {
 };
 
 // ============================================
-// MÓDULO DE RELATÓRIOS (APENAS ADMIN)
+// MÓDULO DE RELATÓRIOS (APENAS ADMIN) - VERSÃO SIMPLIFICADA
 // ============================================
 const Relatorios = {
     charts: {},
@@ -1841,8 +1865,12 @@ const Relatorios = {
         try {
             UI.showLoading();
             
-            document.getElementById('produtoMaisVendido').innerHTML = '<p>Carregando...</p>';
-            document.getElementById('categoriaMaisVendida').innerHTML = '<p>Carregando...</p>';
+            // Verificar se os elementos existem
+            const produtoEl = document.getElementById('produtoMaisVendido');
+            const categoriaEl = document.getElementById('categoriaMaisVendida');
+            
+            if (produtoEl) produtoEl.innerHTML = '<p style="text-align: center;">Carregando...</p>';
+            if (categoriaEl) categoriaEl.innerHTML = '<p style="text-align: center;">Carregando...</p>';
             
             const [lucroDiario, lucroMensal, produtoMaisVendido, categoriaMaisVendida, vendasPeriodo] = 
                 await Promise.all([
@@ -1886,22 +1914,26 @@ const Relatorios = {
         if (produtoEl) {
             if (produto && produto.nome) {
                 produtoEl.innerHTML = `
-                    <h4 style="margin-bottom: 10px; color: var(--accent-primary);">🥇 ${produto.nome}</h4>
-                    <p>Vendas: <strong>${produto.total_vendido || 0}</strong> unidades</p>
+                    <div style="text-align: center;">
+                        <h4 style="margin-bottom: 10px; color: var(--accent-primary);">🥇 ${produto.nome}</h4>
+                        <p>Vendas: <strong>${produto.total_vendido || 0}</strong> unidades</p>
+                    </div>
                 `;
             } else {
-                produtoEl.innerHTML = '<p style="color: var(--text-muted);">Nenhuma venda registrada</p>';
+                produtoEl.innerHTML = '<p style="color: var(--text-muted); text-align: center;">Nenhuma venda registrada</p>';
             }
         }
         
         if (categoriaEl) {
             if (categoria && categoria.categoria) {
                 categoriaEl.innerHTML = `
-                    <h4 style="margin-bottom: 10px; color: var(--accent-primary);">🏆 ${categoria.categoria}</h4>
-                    <p>Faturamento: <strong>${UI.formatCurrency(categoria.valor_total || 0)}</strong></p>
+                    <div style="text-align: center;">
+                        <h4 style="margin-bottom: 10px; color: var(--accent-primary);">🏆 ${categoria.categoria}</h4>
+                        <p>Faturamento: <strong>${UI.formatCurrency(categoria.valor_total || 0)}</strong></p>
+                    </div>
                 `;
             } else {
-                categoriaEl.innerHTML = '<p style="color: var(--text-muted);">Nenhuma venda registrada</p>';
+                categoriaEl.innerHTML = '<p style="color: var(--text-muted); text-align: center;">Nenhuma venda registrada</p>';
             }
         }
     },
