@@ -54,67 +54,10 @@ const API = {
             throw error;
         }
     },
-    // ===== GASTOS =====
-async listarGastos(params = {}) {
-    const queryString = new URLSearchParams(params).toString();
-    return this.request(`/gastos${queryString ? '?' + queryString : ''}`);
-},
 
-async criarGasto(gasto) {
-    return this.request('/gastos', {
-        method: 'POST',
-        body: JSON.stringify(gasto)
-    });
-},
-
-async atualizarGasto(id, gasto) {
-    return this.request(`/gastos/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(gasto)
-    });
-},
-
-async excluirGasto(id) {
-    return this.request(`/gastos/${id}`, {
-        method: 'DELETE'
-    });
-},
-
-async listarCategoriasGastos() {
-    return this.request('/gastos/categorias/listar');
-},
-
-async criarCategoriaGasto(categoria) {
-    return this.request('/gastos/categorias', {
-        method: 'POST',
-        body: JSON.stringify(categoria)
-    });
-},
-
-async excluirCategoriaGasto(id) {
-    return this.request(`/gastos/categorias/${id}`, {
-        method: 'DELETE'
-    });
-},
-
-async listarFormasPagamento() {
-    return this.request('/gastos/formas-pagamento');
-},
-
-async resumoMensal(params = {}) {
-    const queryString = new URLSearchParams(params).toString();
-    return this.request(`/gastos/resumo/mensal${queryString ? '?' + queryString : ''}`);
-},
-
-async exportarResumo(params = {}) {
-    const queryString = new URLSearchParams(params).toString();
-    const url = `${this.baseURL}/gastos/exportar/resumo${queryString ? '?' + queryString : ''}`;
-    const token = this.getToken();
-    window.open(url + `&token=${token}`, '_blank');
-    return { success: true };
-},
-    
-    // ===== AUTH =====
+    // ============================================
+    // AUTH
+    // ============================================
     async login(username, password) {
         return this.request('/auth/login', {
             method: 'POST',
@@ -125,8 +68,10 @@ async exportarResumo(params = {}) {
     async verificarToken() {
         return this.request('/auth/verificar');
     },
-    
-    // ===== PRODUTOS =====
+
+    // ============================================
+    // PRODUTOS
+    // ============================================
     async listarProdutos(params = {}) {
         const queryString = new URLSearchParams(params).toString();
         return this.request(`/produtos${queryString ? '?' + queryString : ''}`);
@@ -162,8 +107,10 @@ async exportarResumo(params = {}) {
     async estoqueBaixo() {
         return this.request('/produtos/estoque-baixo');
     },
-    
-    // ===== VENDAS =====
+
+    // ============================================
+    // VENDAS
+    // ============================================
     async criarVenda(venda) {
         return this.request('/vendas', {
             method: 'POST',
@@ -199,8 +146,10 @@ async exportarResumo(params = {}) {
             body: JSON.stringify({ motivo })
         });
     },
-    
-    // ===== CATEGORIAS =====
+
+    // ============================================
+    // CATEGORIAS
+    // ============================================
     async listarCategorias() {
         return this.request('/categorias');
     },
@@ -224,8 +173,10 @@ async exportarResumo(params = {}) {
             method: 'DELETE'
         });
     },
-    
-    // ===== TIPOS =====
+
+    // ============================================
+    // TIPOS
+    // ============================================
     async listarTipos() {
         return this.request('/tipos');
     },
@@ -253,8 +204,10 @@ async exportarResumo(params = {}) {
             method: 'DELETE'
         });
     },
-    
-    // ===== RELATÓRIOS =====
+
+    // ============================================
+    // RELATÓRIOS
+    // ============================================
     async lucroDiario() {
         return this.request('/relatorios/lucro-diario');
     },
@@ -275,7 +228,9 @@ async exportarResumo(params = {}) {
         return this.request(`/relatorios/vendas-por-periodo?periodo=${periodo}`);
     },
 
-    // ===== NOVO: CAIXA =====
+    // ============================================
+    // CAIXA
+    // ============================================
     async statusCaixa() {
         return this.request('/caixa/status');
     },
@@ -294,6 +249,27 @@ async exportarResumo(params = {}) {
         });
     },
 
+    async resetarCaixa(dados) {
+        return this.request('/caixa/resetar', {
+            method: 'POST',
+            body: JSON.stringify(dados)
+        });
+    },
+
+    async excluirCaixa(id, dados) {
+        return this.request(`/caixa/${id}`, {
+            method: 'DELETE',
+            body: JSON.stringify(dados)
+        });
+    },
+
+    async recalcularCaixa(id, dados) {
+        return this.request(`/caixa/recalcular/${id}`, {
+            method: 'POST',
+            body: JSON.stringify(dados)
+        });
+    },
+
     async historicoCaixa(params = {}) {
         const queryString = new URLSearchParams(params).toString();
         return this.request(`/caixa/historico${queryString ? '?' + queryString : ''}`);
@@ -307,13 +283,75 @@ async exportarResumo(params = {}) {
         return this.request('/caixa/relatorio/mensal');
     },
 
-    // ===== NOVO: EXPORTAÇÃO EXCEL =====
+    // ============================================
+    // GASTOS
+    // ============================================
+    async listarGastos(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        return this.request(`/gastos${queryString ? '?' + queryString : ''}`);
+    },
+
+    async criarGasto(gasto) {
+        return this.request('/gastos', {
+            method: 'POST',
+            body: JSON.stringify(gasto)
+        });
+    },
+
+    async atualizarGasto(id, gasto) {
+        return this.request(`/gastos/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(gasto)
+        });
+    },
+
+    async excluirGasto(id) {
+        return this.request(`/gastos/${id}`, {
+            method: 'DELETE'
+        });
+    },
+
+    async listarCategoriasGastos() {
+        return this.request('/gastos/categorias/listar');
+    },
+
+    async criarCategoriaGasto(categoria) {
+        return this.request('/gastos/categorias', {
+            method: 'POST',
+            body: JSON.stringify(categoria)
+        });
+    },
+
+    async excluirCategoriaGasto(id) {
+        return this.request(`/gastos/categorias/${id}`, {
+            method: 'DELETE'
+        });
+    },
+
+    async listarFormasPagamento() {
+        return this.request('/gastos/formas-pagamento');
+    },
+
+    async resumoMensal(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        return this.request(`/gastos/resumo/mensal${queryString ? '?' + queryString : ''}`);
+    },
+
+    async exportarResumo(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        const url = `${this.baseURL}/gastos/exportar/resumo${queryString ? '?' + queryString : ''}`;
+        const token = this.getToken();
+        window.open(url + `&token=${token}`, '_blank');
+        return { success: true };
+    },
+
+    // ============================================
+    // EXPORTAÇÃO EXCEL
+    // ============================================
     async exportarVendas(params = {}) {
         const queryString = new URLSearchParams(params).toString();
-        // Para download de arquivo, não usar o método request padrão
         const url = `${this.baseURL}/exportar/vendas${queryString ? '?' + queryString : ''}`;
         const token = this.getToken();
-        
         window.open(url + `&token=${token}`, '_blank');
         return { success: true };
     },
@@ -332,7 +370,9 @@ async exportarResumo(params = {}) {
         return { success: true };
     },
 
-    // ===== NOVO: DOSES =====
+    // ============================================
+    // DOSES
+    // ============================================
     async listarDoses() {
         return this.request('/doses');
     },
@@ -364,7 +404,9 @@ async exportarResumo(params = {}) {
         });
     },
 
-    // ===== NOVO: COMBOS =====
+    // ============================================
+    // COMBOS
+    // ============================================
     async listarCombos() {
         return this.request('/combos');
     },
@@ -393,7 +435,9 @@ async exportarResumo(params = {}) {
         });
     },
 
-    // ===== MÉTODO PARA FAZER DOWNLOAD DE ARQUIVOS =====
+    // ============================================
+    // DOWNLOAD DE ARQUIVOS
+    // ============================================
     async downloadFile(url, filename) {
         const token = this.getToken();
         

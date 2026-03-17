@@ -1,76 +1,160 @@
-const CategoriaModel = require('../models/categoriaModel');
-const TipoModel = require('../models/tipoModel');
+const { db } = require('../models/database');
 
-exports.listar = async (req, res) => {
-    try {
-        const categorias = await CategoriaModel.findAll();
-        res.json(categorias);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-};
+const categoriaController = {
+    // Listar todas as categorias
+    listar: (req, res) => {
+        db.all(`
+            SELECT c.*, 
+                   COUNT(p.id) as total_produtos
+            FROM categorias c
+            LEFT JOIN produtos p ON c.id = p.categoria_id
+            GROUP BY c.id
+            ORDER BY c.nome
+        `, [], (err, rows) => {
+            if (err) {
+                console.error('Erro ao listar categorias:', err);
+                return res.status(500).json({ error: err.message });
+            }
+            res.json(rows || []);
+        });
+    },
 
-exports.buscar = async (req, res) => {
-    try {
-        const categoria = await CategoriaModel.findById(req.params.id);
-        if (!categoria) {
-            return res.status(404).json({ error: 'Categoria não encontrada' });
-        }
-        res.json(categoria);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-};
+    // Buscar categoria por ID
+    buscarPorId: (req, res) => {
+        const { id } = req.params;
+        
+        db.get('SELECT * FROM categorias WHERE id = ?', [id], (err, row) => {
+            if (err) {
+                console.error('Erro ao buscar categoria:', err);
+                return res.status(500).json({ error: err.message });
+            }
+            if (!row) {
+                return res.status(404).json({ error: 'Categoria não encontrada' });
+            }
+            res.json(row);
+        });
+    },
 
-exports.criar = async (req, res) => {
-    try {
+    // Criar nova categoria
+    criar: (req, res) => {
         const { nome, tipo, cor } = req.body;
         
+        // VALIDAÇÃO MAIS FLEXÍVEL - qualquer tipo é permitido
         if (!nome || !tipo) {
             return res.status(400).json({ error: 'Nome e tipo são obrigatórios' });
         }
 
-        const id = await CategoriaModel.create(nome, tipo, cor || '#4CAF50');
-        res.json({ id, message: 'Categoria criada com sucesso' });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-};
+        // Normalizar o tipo (remover acentos, espaços, etc)
+        const tipoNormalizado = tipo.toLowerCase().trim();
 
-exports.atualizar = async (req, res) => {
-    try {
+        db.run(
+            'INSERT INTO categorias (nome, tipo, cor) VALUES (?, ?, ?)',
+            [nome, tipoNormalizado, cor || '#c4a747'],
+            function(err) {
+                if (err) {
+                    console.error('Erro ao criar categoria:', err);
+                    return res.status(500).json({ error: err.message });
+                }
+
+                // Emitir evento
+                if (req.io) {
+                    req.io.emit('categoria:criada', { 
+                        id: this.lastID, 
+                        nome,
+                        mensagem: `🏷️ Categoria "${nome}" criada!`
+                    });
+                }
+
+                res.json({ 
+                    id: this.lastID, 
+                    message: 'Categoria criada com sucesso' 
+                });
+            }
+        );
+    },
+
+    // Atualizar categoria
+    atualizar: (req, res) => {
+        const { id } = req.params;
         const { nome, tipo, cor } = req.body;
-        const changes = await CategoriaModel.update(req.params.id, nome, tipo, cor);
-        
-        if (changes === 0) {
-            return res.status(404).json({ error: 'Categoria não encontrada' });
+
+        if (!nome || !tipo) {
+            return res.status(400).json({ error: 'Nome e tipo são obrigatórios' });
         }
-        
-        res.json({ message: 'Categoria atualizada com sucesso' });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
+
+        const tipoNormalizado = tipo.toLowerCase().trim();
+
+        db.run(
+            'UPDATE categorias SET nome = ?, tipo = ?, cor = ? WHERE id = ?',
+            [nome, tipoNormalizado, cor, id],
+            function(err) {
+                if (err) {
+                    console.error('Erro ao atualizar categoria:', err);
+                    return res.status(500).json({ error: err.message });
+                }
+                if (this.changes === 0) {
+                    return res.status(404).json({ error: 'Categoria não encontrada' });
+                }
+
+                if (req.io) {
+                    req.io.emit('categoria:atualizada', { 
+                        id, 
+                        nome,
+                        mensagem: `✏️ Categoria "${nome}" atualizada!`
+                    });
+                }
+
+                res.json({ message: 'Categoria atualizada com sucesso' });
+            }
+        );
+    },
+
+    // Excluir categoria
+    excluir: (req, res) => {
+        const { id } = req.params;
+
+        // Verificar se existem produtos usando esta categoria
+        db.get('SELECT COUNT(*) as count FROM produtos WHERE categoria_id = ?', [id], (err, result) => {
+            if (err) {
+                console.error('Erro ao verificar produtos:', err);
+                return res.status(500).json({ error: err.message });
+            }
+
+            if (result.count > 0) {
+                return res.status(400).json({ 
+                    error: 'Não é possível excluir categoria com produtos vinculados',
+                    quantidade: result.count 
+                });
+            }
+
+            db.run('DELETE FROM categorias WHERE id = ?', [id], function(err) {
+                if (err) {
+                    console.error('Erro ao excluir categoria:', err);
+                    return res.status(500).json({ error: err.message });
+                }
+
+                if (req.io) {
+                    req.io.emit('categoria:excluida', { 
+                        id,
+                        mensagem: `🗑️ Categoria excluída!`
+                    });
+                }
+
+                res.json({ message: 'Categoria excluída com sucesso' });
+            });
+        });
+    },
+
+    // Listar tipos disponíveis (baseado nas categorias existentes)
+    listarTipos: (req, res) => {
+        db.all('SELECT DISTINCT tipo FROM categorias ORDER BY tipo', [], (err, rows) => {
+            if (err) {
+                console.error('Erro ao listar tipos:', err);
+                return res.status(500).json({ error: err.message });
+            }
+            res.json(rows.map(r => r.tipo));
+        });
     }
 };
 
-exports.excluir = async (req, res) => {
-    try {
-        const changes = await CategoriaModel.delete(req.params.id);
-        
-        if (changes === 0) {
-            return res.status(404).json({ error: 'Categoria não encontrada' });
-        }
-        
-        res.json({ message: 'Categoria excluída com sucesso' });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-};
-
-exports.listarTipos = async (req, res) => {
-    try {
-        const tipos = await TipoModel.findByCategoria(req.params.id);
-        res.json(tipos);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-};
+module.exports = categoriaController;

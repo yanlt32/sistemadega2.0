@@ -46,6 +46,7 @@ app.use('/api/categorias', require('./routes/categoriaRoutes'));
 app.use('/api/tipos', require('./routes/tipoRoutes'));
 app.use('/api/exportar', require('./routes/exportacaoRoutes'));
 app.use('/api/gastos', require('./routes/gastoRoutes'));
+app.use('/api/caixa', require('./routes/caixaRoutes'));
 
 // Rotas do frontend
 app.get('/', (req, res) => {

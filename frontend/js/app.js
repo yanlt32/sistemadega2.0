@@ -142,6 +142,12 @@ class App {
             }
             return;
         }
+        
+        // CAIXA - apenas admin (funcionário só vê status)
+        if (path.includes('caixa.html')) {
+            if (window.Caixa) Caixa.init();
+            return;
+        }
     }
 
     static closeAllModals() {
@@ -311,7 +317,8 @@ const Auth = {
                     text.includes('Categorias') || 
                     text.includes('Relatórios') || 
                     text.includes('Gastos') || 
-                    text.includes('Financeiro')) {
+                    text.includes('Financeiro') || 
+                    text.includes('Caixa')) {
                     item.style.display = 'none';
                 } else {
                     item.style.display = 'flex';
@@ -1011,7 +1018,7 @@ const Produtos = {
 };
 
 // ============================================
-// MÓDULO DE VENDAS
+// MÓDULO DE VENDAS (COM VALIDAÇÃO DE CAIXA)
 // ============================================
 const Vendas = {
     carrinho: [],
@@ -1023,6 +1030,72 @@ const Vendas = {
         await this.carregarProdutos();
         this.setupEventListeners();
         this.atualizarCarrinho();
+        this.verificarCaixa(); // Verificar status do caixa
+    },
+    
+    async verificarCaixa() {
+        try {
+            const status = await API.statusCaixa();
+            const btnFinalizar = document.getElementById('btnFinalizarVenda');
+            
+            if (!status.aberto) {
+                // Caixa fechado - desabilitar botão
+                if (btnFinalizar) {
+                    btnFinalizar.disabled = true;
+                    btnFinalizar.style.opacity = '0.5';
+                    btnFinalizar.title = 'Caixa fechado. Não é possível realizar vendas.';
+                }
+                
+                // Mostrar alerta para funcionário
+                if (Auth.isFuncionario()) {
+                    this.mostrarAlertaCaixaFechado();
+                }
+            } else {
+                // Caixa aberto - habilitar botão
+                if (btnFinalizar) {
+                    btnFinalizar.disabled = false;
+                    btnFinalizar.style.opacity = '1';
+                    btnFinalizar.title = '';
+                }
+            }
+        } catch (error) {
+            console.error('Erro ao verificar caixa:', error);
+        }
+    },
+    
+    mostrarAlertaCaixaFechado() {
+        // Remover alerta antigo se existir
+        const alertaAntigo = document.getElementById('alerta-caixa-fechado');
+        if (alertaAntigo) alertaAntigo.remove();
+        
+        const alerta = document.createElement('div');
+        alerta.className = 'alert alert-danger';
+        alerta.id = 'alerta-caixa-fechado';
+        alerta.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <span style="font-size: 24px;">🔒</span>
+                <div style="flex: 1;">
+                    <strong>Caixa Fechado!</strong>
+                    <p style="margin-top: 5px;">O caixa está fechado. Aguarde o administrador abrir para realizar vendas.</p>
+                </div>
+                <button class="btn btn-sm btn-primary" onclick="this.parentElement.parentElement.remove()">OK</button>
+            </div>
+        `;
+        alerta.style.position = 'fixed';
+        alerta.style.top = '20px';
+        alerta.style.left = '50%';
+        alerta.style.transform = 'translateX(-50%)';
+        alerta.style.zIndex = '9999';
+        alerta.style.maxWidth = '500px';
+        alerta.style.width = '90%';
+        alerta.style.boxShadow = '0 5px 20px rgba(0,0,0,0.3)';
+        
+        document.body.appendChild(alerta);
+        
+        // Auto-remover após 10 segundos
+        setTimeout(() => {
+            if (alerta.parentNode) alerta.remove();
+        }, 10000);
     },
     
     setupEventListeners() {
@@ -1084,6 +1157,23 @@ const Vendas = {
                     });
                 } else {
                     App.showNotification('Leitor não disponível', 'warning');
+                }
+            });
+        }
+
+        // Ouvir eventos de caixa via WebSocket
+        if (window.Realtime && Realtime.socket) {
+            Realtime.socket.on('caixa:aberto', () => {
+                this.verificarCaixa();
+                if (Auth.isFuncionario()) {
+                    App.showNotification('🔓 Caixa foi aberto! Você já pode vender.', 'success');
+                }
+            });
+            
+            Realtime.socket.on('caixa:fechado', () => {
+                this.verificarCaixa();
+                if (Auth.isFuncionario()) {
+                    this.mostrarAlertaCaixaFechado();
                 }
             });
         }
@@ -1375,7 +1465,13 @@ const Vendas = {
             this.formaPagamento = '';
             
         } catch (error) {
-            App.showNotification('Erro ao finalizar venda: ' + error.message, 'danger');
+            // Tratamento específico para caixa fechado
+            if (error.message.includes('Caixa fechado') || error.message.includes('caixa fechado')) {
+                App.showNotification('❌ Caixa fechado! Não é possível realizar vendas.', 'danger');
+                this.mostrarAlertaCaixaFechado();
+            } else {
+                App.showNotification('Erro ao finalizar venda: ' + error.message, 'danger');
+            }
         } finally {
             UI.hideLoading();
         }

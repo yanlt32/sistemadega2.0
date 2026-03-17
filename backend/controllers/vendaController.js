@@ -3,134 +3,155 @@ const { db } = require('../models/database');
 const vendaController = {
     // Criar nova venda
     criar: (req, res) => {
-        const { itens, forma_pagamento, observacao } = req.body;
-        const usuario_id = req.usuario.id;
+        // PRIMEIRO: VERIFICAR SE CAIXA ESTÁ ABERTO
+        db.get("SELECT * FROM caixa WHERE status = 'aberto'", [], (err, caixa) => {
+            if (err) {
+                console.error('Erro ao verificar caixa:', err);
+                return res.status(500).json({ 
+                    error: 'Erro ao verificar caixa',
+                    message: 'Não foi possível verificar o status do caixa'
+                });
+            }
+            
+            // Se caixa estiver fechado, NÃO PERMITE A VENDA
+            if (!caixa) {
+                return res.status(400).json({ 
+                    error: 'Caixa fechado',
+                    message: '❌ O caixa está fechado. Não é possível realizar vendas.',
+                    code: 'CAIXA_FECHADO'
+                });
+            }
 
-        console.log('Recebendo venda:', { itens, forma_pagamento, usuario_id });
+            // CONTINUAR COM A VENDA (caixa OK)
+            const { itens, forma_pagamento, observacao } = req.body;
+            const usuario_id = req.usuario.id;
 
-        if (!itens || itens.length === 0) {
-            return res.status(400).json({ error: 'Selecione pelo menos um produto' });
-        }
+            console.log('Recebendo venda:', { itens, forma_pagamento, usuario_id });
 
-        if (!forma_pagamento) {
-            return res.status(400).json({ error: 'Selecione uma forma de pagamento' });
-        }
+            if (!itens || itens.length === 0) {
+                return res.status(400).json({ error: 'Selecione pelo menos um produto' });
+            }
 
-        let total = 0;
-        let lucro = 0;
-        let erros = [];
+            if (!forma_pagamento) {
+                return res.status(400).json({ error: 'Selecione uma forma de pagamento' });
+            }
 
-        const produtosPromises = itens.map(item => {
-            return new Promise((resolve, reject) => {
-                db.get('SELECT * FROM produtos WHERE id = ?', [item.produto_id], (err, produto) => {
-                    if (err) reject(err);
-                    else resolve({ item, produto });
+            let total = 0;
+            let lucro = 0;
+            let erros = [];
+
+            const produtosPromises = itens.map(item => {
+                return new Promise((resolve, reject) => {
+                    db.get('SELECT * FROM produtos WHERE id = ?', [item.produto_id], (err, produto) => {
+                        if (err) reject(err);
+                        else resolve({ item, produto });
+                    });
                 });
             });
-        });
 
-        Promise.all(produtosPromises)
-            .then(resultados => {
-                for (const { item, produto } of resultados) {
-                    if (!produto) {
-                        erros.push(`Produto ID ${item.produto_id} não encontrado`);
-                        continue;
+            Promise.all(produtosPromises)
+                .then(resultados => {
+                    for (const { item, produto } of resultados) {
+                        if (!produto) {
+                            erros.push(`Produto ID ${item.produto_id} não encontrado`);
+                            continue;
+                        }
+
+                        if (produto.quantidade < item.quantidade) {
+                            erros.push(`Estoque insuficiente para ${produto.nome}. Disponível: ${produto.quantidade}`);
+                            continue;
+                        }
+
+                        total += produto.preco_venda * item.quantidade;
+                        lucro += (produto.preco_venda - produto.preco_custo) * item.quantidade;
                     }
 
-                    if (produto.quantidade < item.quantidade) {
-                        erros.push(`Estoque insuficiente para ${produto.nome}. Disponível: ${produto.quantidade}`);
-                        continue;
+                    if (erros.length > 0) {
+                        return res.status(400).json({ erros });
                     }
 
-                    total += produto.preco_venda * item.quantidade;
-                    lucro += (produto.preco_venda - produto.preco_custo) * item.quantidade;
-                }
+                    db.serialize(() => {
+                        db.run('BEGIN TRANSACTION');
 
-                if (erros.length > 0) {
-                    return res.status(400).json({ erros });
-                }
+                        db.run(
+                            `INSERT INTO vendas (total, lucro, forma_pagamento, usuario_id, status, observacao) 
+                             VALUES (?, ?, ?, ?, 'concluida', ?)`,
+                            [total, lucro, forma_pagamento, usuario_id, observacao || null],
+                            function(err) {
+                                if (err) {
+                                    console.error('Erro ao inserir venda:', err);
+                                    db.run('ROLLBACK');
+                                    return res.status(500).json({ error: err.message });
+                                }
 
-                db.serialize(() => {
-                    db.run('BEGIN TRANSACTION');
+                                const venda_id = this.lastID;
+                                console.log('Venda criada com ID:', venda_id);
 
-                    db.run(
-                        `INSERT INTO vendas (total, lucro, forma_pagamento, usuario_id, status, observacao) 
-                         VALUES (?, ?, ?, ?, 'concluida', ?)`,
-                        [total, lucro, forma_pagamento, usuario_id, observacao || null],
-                        function(err) {
-                            if (err) {
-                                console.error('Erro ao inserir venda:', err);
-                                db.run('ROLLBACK');
-                                return res.status(500).json({ error: err.message });
-                            }
+                                let itensInseridos = 0;
 
-                            const venda_id = this.lastID;
-                            console.log('Venda criada com ID:', venda_id);
+                                resultados.forEach(({ item, produto }) => {
+                                    db.run(
+                                        `INSERT INTO itens_venda (venda_id, produto_id, quantidade, preco_unitario, preco_custo_unitario) 
+                                         VALUES (?, ?, ?, ?, ?)`,
+                                        [venda_id, item.produto_id, item.quantidade, produto.preco_venda, produto.preco_custo],
+                                        function(err) {
+                                            if (err) {
+                                                console.error('Erro ao inserir item:', err);
+                                                db.run('ROLLBACK');
+                                                return;
+                                            }
 
-                            let itensInseridos = 0;
+                                            db.run(
+                                                'UPDATE produtos SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                                                [item.quantidade, item.produto_id],
+                                                function(err) {
+                                                    if (err) {
+                                                        console.error('Erro ao atualizar estoque:', err);
+                                                        db.run('ROLLBACK');
+                                                        return;
+                                                    }
 
-                            resultados.forEach(({ item, produto }) => {
-                                db.run(
-                                    `INSERT INTO itens_venda (venda_id, produto_id, quantidade, preco_unitario, preco_custo_unitario) 
-                                     VALUES (?, ?, ?, ?, ?)`,
-                                    [venda_id, item.produto_id, item.quantidade, produto.preco_venda, produto.preco_custo],
-                                    function(err) {
-                                        if (err) {
-                                            console.error('Erro ao inserir item:', err);
-                                            db.run('ROLLBACK');
-                                            return;
-                                        }
+                                                    db.run(
+                                                        `INSERT INTO movimentacoes_estoque (produto_id, tipo, quantidade, observacao, usuario_id) 
+                                                         VALUES (?, 'saida', ?, ?, ?)`,
+                                                        [item.produto_id, item.quantidade, `Venda #${venda_id}`, usuario_id]
+                                                    );
 
-                                        db.run(
-                                            'UPDATE produtos SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-                                            [item.quantidade, item.produto_id],
-                                            function(err) {
-                                                if (err) {
-                                                    console.error('Erro ao atualizar estoque:', err);
-                                                    db.run('ROLLBACK');
-                                                    return;
-                                                }
-
-                                                db.run(
-                                                    `INSERT INTO movimentacoes_estoque (produto_id, tipo, quantidade, observacao, usuario_id) 
-                                                     VALUES (?, 'saida', ?, ?, ?)`,
-                                                    [item.produto_id, item.quantidade, `Venda #${venda_id}`, usuario_id]
-                                                );
-
-                                                itensInseridos++;
-                                                
-                                                if (itensInseridos === itens.length) {
-                                                    db.run('COMMIT');
+                                                    itensInseridos++;
                                                     
-                                                    if (req.io) {
-                                                        req.io.emit('venda:realizada', { 
+                                                    if (itensInseridos === itens.length) {
+                                                        db.run('COMMIT');
+                                                        
+                                                        if (req.io) {
+                                                            req.io.emit('venda:realizada', { 
+                                                                id: venda_id, 
+                                                                total,
+                                                                lucro,
+                                                                mensagem: `💰 Venda de R$ ${total.toFixed(2)} realizada!`
+                                                            });
+                                                        }
+                                                        
+                                                        res.json({ 
                                                             id: venda_id, 
+                                                            message: 'Venda finalizada com sucesso',
                                                             total,
-                                                            lucro,
-                                                            mensagem: `💰 Venda de R$ ${total.toFixed(2)} realizada!`
+                                                            lucro
                                                         });
                                                     }
-                                                    
-                                                    res.json({ 
-                                                        id: venda_id, 
-                                                        message: 'Venda finalizada com sucesso',
-                                                        total,
-                                                        lucro
-                                                    });
                                                 }
-                                            }
-                                        );
-                                    }
-                                );
-                            });
-                        }
-                    );
+                                            );
+                                        }
+                                    );
+                                });
+                            }
+                        );
+                    });
+                })
+                .catch(err => {
+                    console.error('Erro ao processar venda:', err);
+                    res.status(500).json({ error: err.message });
                 });
-            })
-            .catch(err => {
-                console.error('Erro ao processar venda:', err);
-                res.status(500).json({ error: err.message });
-            });
+        });
     },
 
     // Listar vendas
@@ -227,50 +248,67 @@ const vendaController = {
         );
     },
 
-    // Excluir venda
+    // Excluir venda (com verificação de permissão)
     excluir: (req, res) => {
         const { id } = req.params;
+        const usuario_id = req.usuario.id;
 
-        db.all('SELECT * FROM itens_venda WHERE venda_id = ?', [id], (err, itens) => {
+        // Verificar se usuário é admin
+        db.get('SELECT role FROM usuarios WHERE id = ?', [usuario_id], (err, user) => {
             if (err) {
-                console.error('Erro ao buscar itens da venda:', err);
+                console.error('Erro ao verificar usuário:', err);
                 return res.status(500).json({ error: err.message });
             }
 
-            db.serialize(() => {
-                db.run('BEGIN TRANSACTION');
+            if (!user || user.role !== 'admin') {
+                return res.status(403).json({ error: 'Apenas administradores podem excluir vendas' });
+            }
 
-                itens.forEach(item => {
-                    db.run(
-                        'UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?',
-                        [item.quantidade, item.produto_id]
-                    );
+            // Buscar itens da venda para restaurar estoque
+            db.all('SELECT * FROM itens_venda WHERE venda_id = ?', [id], (err, itens) => {
+                if (err) {
+                    console.error('Erro ao buscar itens da venda:', err);
+                    return res.status(500).json({ error: err.message });
+                }
 
-                    db.run(
-                        `INSERT INTO movimentacoes_estoque (produto_id, tipo, quantidade, observacao, usuario_id) 
-                         VALUES (?, 'entrada', ?, ?, ?)`,
-                        [item.produto_id, item.quantidade, `Estorno venda #${id}`, req.usuario.id]
-                    );
-                });
+                db.serialize(() => {
+                    db.run('BEGIN TRANSACTION');
 
-                db.run('DELETE FROM itens_venda WHERE venda_id = ?', [id]);
-                db.run('DELETE FROM vendas WHERE id = ?', [id], function(err) {
-                    if (err) {
-                        console.error('Erro ao excluir venda:', err);
-                        db.run('ROLLBACK');
-                        return res.status(500).json({ error: err.message });
-                    }
+                    itens.forEach(item => {
+                        db.run(
+                            'UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?',
+                            [item.quantidade, item.produto_id]
+                        );
 
-                    db.run('COMMIT');
-                    
-                    if (req.io) {
-                        req.io.emit('venda:excluida', { 
-                            id,
-                            mensagem: `🗑️ Venda #${id} excluída!`
+                        db.run(
+                            `INSERT INTO movimentacoes_estoque (produto_id, tipo, quantidade, observacao, usuario_id) 
+                             VALUES (?, 'entrada', ?, ?, ?)`,
+                            [item.produto_id, item.quantidade, `Estorno venda #${id}`, usuario_id]
+                        );
+                    });
+
+                    db.run('DELETE FROM itens_venda WHERE venda_id = ?', [id]);
+                    db.run('DELETE FROM vendas WHERE id = ?', [id], function(err) {
+                        if (err) {
+                            console.error('Erro ao excluir venda:', err);
+                            db.run('ROLLBACK');
+                            return res.status(500).json({ error: err.message });
+                        }
+
+                        db.run('COMMIT');
+                        
+                        if (req.io) {
+                            req.io.emit('venda:excluida', { 
+                                id,
+                                mensagem: `🗑️ Venda #${id} excluída!`
+                            });
+                        }
+
+                        res.json({ 
+                            message: 'Venda excluída com sucesso',
+                            itensRestaurados: itens.length 
                         });
-                    }
-
-                    res.json({ message: 'Venda excluída com sucesso' });
+                    });
                 });
             });
         });

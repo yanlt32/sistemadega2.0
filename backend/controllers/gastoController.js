@@ -238,28 +238,87 @@ const gastoController = {
         });
     },
 
-    // Listar formas de pagamento
+    // ✅ CORREÇÃO: Função para listar formas de pagamento
     listarFormasPagamento: (req, res) => {
         db.all('SELECT * FROM formas_pagamento ORDER BY nome', [], (err, formas) => {
             if (err) {
                 console.error('Erro ao listar formas de pagamento:', err);
                 return res.status(500).json({ error: err.message });
             }
+            // Retornar array vazio se não houver formas, não erro
             res.json(formas || []);
         });
     },
 
-    // Resumo mensal
+    // ✅ NOVA FUNÇÃO: Resumo simplificado para o dashboard
+    resumoSimplificado: (req, res) => {
+        const { periodo = 'mes' } = req.query;
+        const hoje = new Date();
+        let dataInicio;
+
+        if (periodo === 'semana') {
+            dataInicio = new Date(hoje.setDate(hoje.getDate() - 7));
+        } else if (periodo === 'mes') {
+            dataInicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+        } else if (periodo === 'ano') {
+            dataInicio = new Date(hoje.getFullYear(), 0, 1);
+        }
+
+        Promise.all([
+            // Total de vendas do período
+            new Promise((resolve) => {
+                db.get(`
+                    SELECT COALESCE(SUM(total),0) as total_vendas, COUNT(*) as qtd_vendas
+                    FROM vendas WHERE data_venda >= ? AND status = 'concluida'
+                `, [dataInicio.toISOString()], (err, result) => {
+                    resolve(result || { total_vendas: 0, qtd_vendas: 0 });
+                });
+            }),
+            // Total de gastos do período
+            new Promise((resolve) => {
+                db.get(`
+                    SELECT COALESCE(SUM(valor),0) as total_gastos, COUNT(*) as qtd_gastos
+                    FROM gastos WHERE data_gasto >= ?
+                `, [dataInicio.toISOString()], (err, result) => {
+                    resolve(result || { total_gastos: 0, qtd_gastos: 0 });
+                });
+            }),
+            // Vendas por forma de pagamento
+            new Promise((resolve) => {
+                db.all(`
+                    SELECT forma_pagamento, COUNT(*) as quantidade, SUM(total) as total
+                    FROM vendas WHERE data_venda >= ? AND status = 'concluida'
+                    GROUP BY forma_pagamento
+                `, [dataInicio.toISOString()], (err, result) => {
+                    resolve(result || []);
+                });
+            })
+        ]).then(([vendas, gastos, pagamentos]) => {
+            res.json({
+                periodo,
+                vendas: vendas.total_vendas,
+                gastos: gastos.total_gastos,
+                saldo: vendas.total_vendas - gastos.total_gastos,
+                qtd_vendas: vendas.qtd_vendas,
+                qtd_gastos: gastos.qtd_gastos,
+                pagamentos
+            });
+        }).catch(err => {
+            console.error('Erro no resumo simplificado:', err);
+            res.status(500).json({ error: err.message });
+        });
+    },
+
+    // Resumo mensal completo
     resumoMensal: (req, res) => {
         const { mes, ano } = req.query;
         const mesAtual = mes || new Date().getMonth() + 1;
         const anoAtual = ano || new Date().getFullYear();
-
         const mesFormatado = mesAtual.toString().padStart(2, '0');
 
         Promise.all([
             // Total de vendas do mês
-            new Promise((resolve, reject) => {
+            new Promise((resolve) => {
                 db.get(`
                     SELECT 
                         COALESCE(SUM(total), 0) as total_vendas,
@@ -270,13 +329,12 @@ const gastoController = {
                     AND strftime('%Y', data_venda) = ?
                     AND status = 'concluida'
                 `, [mesFormatado, anoAtual], (err, result) => {
-                    if (err) reject(err);
-                    else resolve(result || { total_vendas: 0, total_lucro: 0, quantidade_vendas: 0 });
+                    resolve(result || { total_vendas: 0, total_lucro: 0, quantidade_vendas: 0 });
                 });
             }),
 
             // Total de gastos do mês
-            new Promise((resolve, reject) => {
+            new Promise((resolve) => {
                 db.get(`
                     SELECT 
                         COALESCE(SUM(valor), 0) as total_gastos,
@@ -285,13 +343,12 @@ const gastoController = {
                     WHERE strftime('%m', data_gasto) = ? 
                     AND strftime('%Y', data_gasto) = ?
                 `, [mesFormatado, anoAtual], (err, result) => {
-                    if (err) reject(err);
-                    else resolve(result || { total_gastos: 0, quantidade_gastos: 0 });
+                    resolve(result || { total_gastos: 0, quantidade_gastos: 0 });
                 });
             }),
 
             // Gastos por categoria
-            new Promise((resolve, reject) => {
+            new Promise((resolve) => {
                 db.all(`
                     SELECT 
                         COALESCE(c.nome, 'Sem categoria') as categoria,
@@ -305,28 +362,25 @@ const gastoController = {
                     GROUP BY g.categoria_id
                     ORDER BY total DESC
                 `, [mesFormatado, anoAtual], (err, result) => {
-                    if (err) reject(err);
-                    else resolve(result || []);
+                    resolve(result || []);
                 });
             }),
 
             // Vendas por forma de pagamento
-            new Promise((resolve, reject) => {
+            new Promise((resolve) => {
                 db.all(`
                     SELECT 
-                        COALESCE(f.nome, 'Sem informação') as forma_pagamento,
-                        COALESCE(SUM(v.total), 0) as total,
-                        COUNT(*) as quantidade
-                    FROM vendas v
-                    LEFT JOIN formas_pagamento f ON v.forma_pagamento_id = f.id
-                    WHERE strftime('%m', v.data_venda) = ? 
-                    AND strftime('%Y', v.data_venda) = ?
-                    AND v.status = 'concluida'
-                    GROUP BY v.forma_pagamento_id
+                        forma_pagamento,
+                        COUNT(*) as quantidade,
+                        COALESCE(SUM(total), 0) as total
+                    FROM vendas 
+                    WHERE strftime('%m', data_venda) = ? 
+                    AND strftime('%Y', data_venda) = ?
+                    AND status = 'concluida'
+                    GROUP BY forma_pagamento
                     ORDER BY total DESC
                 `, [mesFormatado, anoAtual], (err, result) => {
-                    if (err) reject(err);
-                    else resolve(result || []);
+                    resolve(result || []);
                 });
             })
         ])
@@ -372,10 +426,9 @@ const gastoController = {
                         v.data_venda,
                         v.total,
                         v.lucro,
-                        COALESCE(f.nome, v.forma_pagamento_text, 'N/A') as forma_pagamento,
+                        v.forma_pagamento,
                         COALESCE(u.nome, 'Sistema') as vendedor
                     FROM vendas v
-                    LEFT JOIN formas_pagamento f ON v.forma_pagamento_id = f.id
                     LEFT JOIN usuarios u ON v.usuario_id = u.id
                     WHERE strftime('%m', v.data_venda) = ? 
                     AND strftime('%Y', v.data_venda) = ?
@@ -395,12 +448,10 @@ const gastoController = {
                         g.valor,
                         g.data_gasto,
                         COALESCE(c.nome, 'Sem categoria') as categoria,
-                        COALESCE(f.nome, 'N/A') as forma_pagamento,
-                        COALESCE(u.nome, 'Sistema') as usuario
+                        COALESCE(f.nome, 'N/A') as forma_pagamento
                     FROM gastos g
                     LEFT JOIN categorias_gastos c ON g.categoria_id = c.id
                     LEFT JOIN formas_pagamento f ON g.forma_pagamento_id = f.id
-                    LEFT JOIN usuarios u ON g.usuario_id = u.id
                     WHERE strftime('%m', g.data_gasto) = ? 
                     AND strftime('%Y', g.data_gasto) = ?
                     ORDER BY g.data_gasto DESC
@@ -467,8 +518,7 @@ const gastoController = {
                 { header: 'Categoria', key: 'categoria', width: 20 },
                 { header: 'Valor', key: 'valor', width: 15 },
                 { header: 'Data', key: 'data', width: 20 },
-                { header: 'Pagamento', key: 'pagamento', width: 15 },
-                { header: 'Usuário', key: 'usuario', width: 20 }
+                { header: 'Pagamento', key: 'pagamento', width: 15 }
             ];
 
             gastos.forEach(g => {
@@ -478,32 +528,9 @@ const gastoController = {
                     categoria: g.categoria || 'N/A',
                     valor: g.valor,
                     data: new Date(g.data_gasto).toLocaleString('pt-BR'),
-                    pagamento: g.forma_pagamento || 'N/A',
-                    usuario: g.usuario || 'Sistema'
+                    pagamento: g.forma_pagamento || 'N/A'
                 });
             });
-
-            // Estilizar cabeçalhos
-            sheetResumo.getRow(1).font = { bold: true, size: 14 };
-            sheetResumo.getRow(1).fill = {
-                type: 'pattern',
-                pattern: 'solid',
-                fgColor: { argb: 'FFc4a747' }
-            };
-
-            sheetVendas.getRow(1).font = { bold: true };
-            sheetVendas.getRow(1).fill = {
-                type: 'pattern',
-                pattern: 'solid',
-                fgColor: { argb: 'FFc4a747' }
-            };
-
-            sheetGastos.getRow(1).font = { bold: true };
-            sheetGastos.getRow(1).fill = {
-                type: 'pattern',
-                pattern: 'solid',
-                fgColor: { argb: 'FFc4a747' }
-            };
 
             res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
             res.setHeader('Content-Disposition', `attachment; filename=resumo_${mesAtual}_${anoAtual}.xlsx`);

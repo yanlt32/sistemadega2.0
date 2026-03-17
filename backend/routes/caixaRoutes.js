@@ -6,16 +6,12 @@ const { isAdmin, isFuncionario } = require('../middleware/permissaoMiddleware');
 
 router.use(authMiddleware);
 
-// Todos podem ver status do caixa
-router.get('/status', isFuncionario, caixaController.status);
-
-// Funcionário pode abrir/fechar caixa
-router.post('/abrir', isFuncionario, caixaController.abrir);
-router.post('/fechar', isFuncionario, caixaController.fechar);
-
-// Apenas admin vê relatórios e histórico completo
+router.post('/abrir', isAdmin, caixaController.abrirCaixa);
+router.get('/status', isFuncionario, caixaController.statusCaixa);
+router.post('/fechar', isAdmin, caixaController.fecharCaixa);
+router.post('/recalcular/:id', isAdmin, caixaController.recalcularCaixa);
+router.delete('/:id', isAdmin, caixaController.excluirCaixa);
+router.post('/resetar', isAdmin, caixaController.resetarCaixa);
 router.get('/historico', isAdmin, caixaController.historico);
-router.get('/relatorio/semanal', isAdmin, caixaController.relatorioSemanal);
-router.get('/relatorio/mensal', isAdmin, caixaController.relatorioMensal);
 
 module.exports = router;

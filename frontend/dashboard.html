@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <title>Dashboard - PodPá</title>
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/style-mobile.css">
@@ -23,9 +23,10 @@
                 <li onclick="window.location.href='/vendas.html'">💰 <span>Vendas</span></li>
                 <li onclick="window.location.href='/historico-vendas.html'">📋 <span>Histórico</span></li>
                 <li onclick="window.location.href='/categorias.html'">🏷️ <span>Categorias</span></li>
-                <li onclick="window.location.href='/relatorios.html'">📈 <span>Relatórios</span></li>
+                <li onclick="window.location.href='/caixa.html'">💵 <span>Caixa</span></li>
                 <li onclick="window.location.href='/gastos.html'">💸 <span>Gastos</span></li>
                 <li onclick="window.location.href='/financeiro.html'">📈 <span>Financeiro</span></li>
+                <li onclick="window.location.href='/relatorios.html'">📊 <span>Relatórios</span></li>
             </ul>
         </aside>
         
@@ -37,6 +38,11 @@
                     <span id="userRole" class="badge"></span>
                     <button class="logout-btn" id="logoutBtn">Sair</button>
                 </div>
+            </div>
+            
+            <!-- Informação do período filtrado -->
+            <div style="text-align: center; margin-bottom: 10px;">
+                <span id="periodoInfo" style="background: var(--bg-tertiary); padding: 5px 15px; border-radius: 20px; font-size: 14px; color: var(--text-secondary);"></span>
             </div>
             
             <!-- Cards de Estatísticas -->
@@ -88,6 +94,12 @@
                     <div class="stat-value" id="estoqueBaixo">0</div>
                     <div class="stat-label">Produtos</div>
                 </div>
+            </div>
+            
+            <!-- Cards de Pagamento -->
+            <div class="card" style="margin-top: 20px; margin-bottom: 20px;">
+                <h3>💰 Vendas de Hoje por Forma de Pagamento</h3>
+                <div id="pagamentosHoje"></div>
             </div>
             
             <!-- Gráficos -->
@@ -201,6 +213,6 @@
             });
         });
     });
-</script>
+    </script>
 </body>
 </html>

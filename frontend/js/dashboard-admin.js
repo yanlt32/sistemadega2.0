@@ -1,10 +1,15 @@
 // ============================================
-// DASHBOARD ADMIN - VERSÃO COMPLETA E CORRIGIDA
+// DASHBOARD ADMIN - VERSÃO COM FILTRO FUNCIONAL
 // ============================================
 const DashboardAdmin = {
     charts: {},
     data: {},
     refreshInterval: null,
+    filtroAtual: {
+        tipo: 'mes',
+        mes: new Date().getMonth() + 1,
+        ano: new Date().getFullYear()
+    },
     
     async init() {
         await Auth.checkAuth();
@@ -15,61 +20,209 @@ const DashboardAdmin = {
             return;
         }
         
+        this.adicionarFiltro();
+        this.destruirGraficos();
         await this.carregarDados();
-        this.inicializarGraficos();
+        
+        setTimeout(() => {
+            this.inicializarGraficos();
+        }, 100);
+        
         this.configurarAtualizacao();
+    },
+    
+    adicionarFiltro() {
+        const topBar = document.querySelector('.top-bar');
+        if (!topBar) return;
+        
+        if (document.getElementById('filtroDashboard')) return;
+        
+        const filtroDiv = document.createElement('div');
+        filtroDiv.id = 'filtroDashboard';
+        filtroDiv.style.display = 'flex';
+        filtroDiv.style.gap = '10px';
+        filtroDiv.style.margin = '15px 0';
+        filtroDiv.style.flexWrap = 'wrap';
+        filtroDiv.style.justifyContent = 'center';
+        filtroDiv.style.alignItems = 'center';
+        
+        filtroDiv.innerHTML = `
+            <select id="filtroTipo" style="padding: 8px; border-radius: 6px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                <option value="mes">Mês</option>
+                <option value="ano">Ano</option>
+            </select>
+            
+            <div id="filtroMesContainer" style="display: inline-block;">
+                <select id="filtroMes" style="padding: 8px; border-radius: 6px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                    <option value="1">Janeiro</option>
+                    <option value="2">Fevereiro</option>
+                    <option value="3">Março</option>
+                    <option value="4">Abril</option>
+                    <option value="5">Maio</option>
+                    <option value="6">Junho</option>
+                    <option value="7">Julho</option>
+                    <option value="8">Agosto</option>
+                    <option value="9">Setembro</option>
+                    <option value="10">Outubro</option>
+                    <option value="11">Novembro</option>
+                    <option value="12">Dezembro</option>
+                </select>
+            </div>
+            
+            <div id="filtroAnoContainer" style="display: inline-block;">
+                <input type="number" id="filtroAno" value="${new Date().getFullYear()}" min="2020" max="2030" style="width: 100px; padding: 8px; border-radius: 6px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color);">
+            </div>
+            
+            <button class="btn btn-primary btn-sm" onclick="DashboardAdmin.aplicarFiltro()">Filtrar</button>
+            <button class="btn btn-secondary btn-sm" onclick="DashboardAdmin.limparFiltro()">Mês Atual</button>
+        `;
+        
+        topBar.parentNode.insertBefore(filtroDiv, topBar.nextSibling);
+        
+        document.getElementById('filtroTipo').addEventListener('change', (e) => {
+            const tipo = e.target.value;
+            const mesContainer = document.getElementById('filtroMesContainer');
+            
+            if (tipo === 'mes') {
+                mesContainer.style.display = 'inline-block';
+            } else {
+                mesContainer.style.display = 'none';
+            }
+        });
+    },
+    
+    aplicarFiltro() {
+        const tipo = document.getElementById('filtroTipo')?.value;
+        const mes = document.getElementById('filtroMes')?.value;
+        const ano = document.getElementById('filtroAno')?.value;
+        
+        this.filtroAtual = {
+            tipo: tipo || 'mes',
+            mes: tipo === 'mes' ? parseInt(mes) : null,
+            ano: parseInt(ano)
+        };
+        
+        this.carregarDados();
+    },
+    
+    limparFiltro() {
+        const hoje = new Date();
+        this.filtroAtual = {
+            tipo: 'mes',
+            mes: hoje.getMonth() + 1,
+            ano: hoje.getFullYear()
+        };
+        
+        const tipoSelect = document.getElementById('filtroTipo');
+        const mesSelect = document.getElementById('filtroMes');
+        const anoInput = document.getElementById('filtroAno');
+        
+        if (tipoSelect) tipoSelect.value = 'mes';
+        if (mesSelect) mesSelect.value = this.filtroAtual.mes;
+        if (anoInput) anoInput.value = this.filtroAtual.ano;
+        
+        document.getElementById('filtroMesContainer').style.display = 'inline-block';
+        
+        this.carregarDados();
+    },
+    
+    destruirGraficos() {
+        try {
+            if (this.charts.vendas) {
+                this.charts.vendas.destroy();
+                this.charts.vendas = null;
+            }
+        } catch (e) {}
+        
+        try {
+            if (this.charts.produtos) {
+                this.charts.produtos.destroy();
+                this.charts.produtos = null;
+            }
+        } catch (e) {}
     },
     
     async carregarDados() {
         try {
             UI.showLoading();
             
-            const [lucroDiario, lucroMensal, estoqueBaixo, vendasPeriodo, produtosMaisVendidos, ultimasVendas] = await Promise.all([
-                API.lucroDiario().catch(() => ({ total_vendas: 0, total_lucro: 0, quantidade_vendas: 0 })),
-                API.lucroMensal().catch(() => ({ total_vendas: 0, total_lucro: 0 })),
-                API.estoqueBaixo().catch(() => []),
-                API.vendasPorPeriodo('dia').catch(() => []),
-                this.buscarProdutosMaisVendidos(),
-                API.listarVendas({ limite: 10 }).catch(() => ({ vendas: [] }))
-            ]);
+            // Calcular datas do período filtrado
+            let dataInicio, dataFim;
             
-            const vendasUltimos7Dias = this.processarVendasSemana(vendasPeriodo);
-            
-            this.data = {
-                lucroDiario,
-                lucroMensal,
-                estoqueBaixo,
-                vendasPeriodo: vendasUltimos7Dias,
-                produtosMaisVendidos: produtosMaisVendidos || [],
-                ultimasVendas: ultimasVendas.vendas || []
-            };
-            
-            this.atualizarCards();
-            this.atualizarGraficos();
-            this.mostrarEstoqueBaixo();
-            this.mostrarProdutosMaisVendidos();
-            this.mostrarUltimasVendas();
-            
-        } catch (error) {
-            console.error('Erro ao carregar dashboard:', error);
-            if (window.Notificacao) {
-                Notificacao.mostrar('Erro ao carregar dados', 'danger');
+            if (this.filtroAtual.tipo === 'mes') {
+                dataInicio = new Date(this.filtroAtual.ano, this.filtroAtual.mes - 1, 1);
+                dataFim = new Date(this.filtroAtual.ano, this.filtroAtual.mes, 0);
+            } else {
+                dataInicio = new Date(this.filtroAtual.ano, 0, 1);
+                dataFim = new Date(this.filtroAtual.ano, 11, 31);
             }
-        } finally {
-            UI.hideLoading();
-        }
-    },
-    
-    async buscarProdutosMaisVendidos() {
-        try {
-            // Buscar vendas dos últimos 30 dias
-            const response = await API.listarVendas({ limite: 100 });
-            const vendas = response.vendas || [];
             
-            // Mapa para contar produtos
+            const dataInicioStr = dataInicio.toISOString().split('T')[0];
+            const dataFimStr = dataFim.toISOString().split('T')[0];
+            
+            console.log('🔍 Buscando dados de:', dataInicioStr, 'até', dataFimStr);
+            
+            // Buscar vendas do período filtrado
+            const response = await API.listarVendas({ 
+                data_inicio: dataInicioStr,
+                data_fim: dataFimStr,
+                limite: 1000
+            });
+            
+            const vendas = response.vendas || [];
+            console.log('📊 Vendas encontradas:', vendas.length);
+            
+            // Calcular totais do período
+            let totalVendasPeriodo = 0;
+            let totalLucroPeriodo = 0;
+            let quantidadeVendas = vendas.length;
+            
+            vendas.forEach(v => {
+                totalVendasPeriodo += v.total || 0;
+                totalLucroPeriodo += v.lucro || 0;
+            });
+            
+            // Dados do dia (sempre atual)
+            const hoje = new Date().toISOString().split('T')[0];
+            const vendasHojeResponse = await API.listarVendas({ 
+                data_inicio: hoje,
+                data_fim: hoje,
+                limite: 100
+            });
+            
+            const vendasHoje = vendasHojeResponse.vendas || [];
+            let totalVendasHoje = 0;
+            let totalLucroHoje = 0;
+            let quantidadeHoje = 0;
+            
+            vendasHoje.forEach(v => {
+                totalVendasHoje += v.total || 0;
+                totalLucroHoje += v.lucro || 0;
+                quantidadeHoje++;
+            });
+            
+            // Calcular vendas dos últimos 7 dias
+            const ultimos7Dias = [];
+            for (let i = 6; i >= 0; i--) {
+                const data = new Date();
+                data.setDate(data.getDate() - i);
+                const dataStr = data.toISOString().split('T')[0];
+                
+                const vendasDia = vendas.filter(v => 
+                    v.data_venda && v.data_venda.split('T')[0] === dataStr
+                );
+                
+                const totalDia = vendasDia.reduce((acc, v) => acc + (v.total || 0), 0);
+                
+                ultimos7Dias.push({
+                    data: data.toLocaleDateString('pt-BR', { weekday: 'short' }),
+                    total: totalDia
+                });
+            }
+            
+            // Buscar produtos mais vendidos do período
             const produtosMap = new Map();
             
-            // Para cada venda, buscar detalhes
             for (const venda of vendas) {
                 try {
                     const detalhes = await API.buscarVenda(venda.id);
@@ -86,40 +239,61 @@ const DashboardAdmin = {
                             produtosMap.get(key).quantidade += item.quantidade || 0;
                         });
                     }
-                } catch (e) {
-                    console.log('Erro ao buscar detalhes da venda', venda.id);
-                }
+                } catch (e) {}
             }
             
-            // Converter para array, ordenar e pegar top 5
-            return Array.from(produtosMap.values())
+            const produtosMaisVendidos = Array.from(produtosMap.values())
                 .sort((a, b) => b.quantidade - a.quantidade)
                 .slice(0, 5);
-                
+            
+            // Buscar estoque baixo
+            const estoqueBaixo = await API.estoqueBaixo().catch(() => []);
+            
+            // Últimas vendas (sempre as mais recentes)
+            const ultimasVendas = await API.listarVendas({ limite: 5 }).catch(() => ({ vendas: [] }));
+            
+            this.data = {
+                vendasHoje: totalVendasHoje,
+                lucroHoje: totalLucroHoje,
+                quantidadeHoje,
+                vendasPeriodo: totalVendasPeriodo,
+                lucroPeriodo: totalLucroPeriodo,
+                quantidadePeriodo: quantidadeVendas,
+                vendasSemana: ultimos7Dias.reduce((acc, d) => acc + d.total, 0),
+                lucroSemana: ultimos7Dias.reduce((acc, d) => acc + (d.total * 0.3), 0),
+                vendasPorDia: ultimos7Dias,
+                produtosMaisVendidos,
+                estoqueBaixo,
+                ultimasVendas: ultimasVendas.vendas || []
+            };
+            
+            this.atualizarCards();
+            this.atualizarInfoFiltro();
+            this.atualizarGraficos();
+            this.mostrarEstoqueBaixo();
+            this.mostrarProdutosMaisVendidos();
+            this.mostrarUltimasVendas();
+            this.atualizarPagamentos();
+            
         } catch (error) {
-            console.error('Erro ao buscar produtos mais vendidos:', error);
-            return [];
+            console.error('Erro ao carregar dashboard:', error);
+        } finally {
+            UI.hideLoading();
         }
     },
     
-    processarVendasSemana(vendasPeriodo) {
-        const ultimos7Dias = [];
-        const hoje = new Date();
+    atualizarInfoFiltro() {
+        const periodoInfo = document.getElementById('periodoInfo');
+        if (!periodoInfo) return;
         
-        for (let i = 6; i >= 0; i--) {
-            const data = new Date(hoje);
-            data.setDate(hoje.getDate() - i);
-            const dataStr = data.toISOString().split('T')[0];
-            
-            const vendaDia = vendasPeriodo.find(v => v.periodo === dataStr) || { total_vendas: 0 };
-            
-            ultimos7Dias.push({
-                data: data.toLocaleDateString('pt-BR', { weekday: 'short' }),
-                total: vendaDia.total_vendas || 0
-            });
+        const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
+                       'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+        
+        if (this.filtroAtual.tipo === 'mes') {
+            periodoInfo.textContent = `📅 Período filtrado: ${meses[this.filtroAtual.mes - 1]} de ${this.filtroAtual.ano}`;
+        } else {
+            periodoInfo.textContent = `📅 Período filtrado: Ano de ${this.filtroAtual.ano}`;
         }
-        
-        return ultimos7Dias;
     },
     
     atualizarCards() {
@@ -134,90 +308,94 @@ const DashboardAdmin = {
         };
         
         if (elementos.vendasHoje) {
-            elementos.vendasHoje.textContent = UI.formatCurrency(this.data.lucroDiario?.total_vendas || 0);
+            elementos.vendasHoje.textContent = UI.formatCurrency(this.data.vendasHoje || 0);
         }
-        
         if (elementos.lucroHoje) {
-            elementos.lucroHoje.textContent = UI.formatCurrency(this.data.lucroDiario?.total_lucro || 0);
+            elementos.lucroHoje.textContent = UI.formatCurrency(this.data.lucroHoje || 0);
         }
-        
         if (elementos.vendasSemana) {
-            const totalSemana = this.data.vendasPeriodo.reduce((acc, d) => acc + d.total, 0);
-            elementos.vendasSemana.textContent = UI.formatCurrency(totalSemana);
+            elementos.vendasSemana.textContent = UI.formatCurrency(this.data.vendasSemana || 0);
         }
-        
         if (elementos.lucroSemana) {
-            const totalVendas = this.data.vendasPeriodo.reduce((acc, d) => acc + d.total, 0);
-            const margemLucro = 0.3;
-            elementos.lucroSemana.textContent = UI.formatCurrency(totalVendas * margemLucro);
+            elementos.lucroSemana.textContent = UI.formatCurrency(this.data.lucroSemana || 0);
         }
-        
         if (elementos.vendasMes) {
-            elementos.vendasMes.textContent = UI.formatCurrency(this.data.lucroMensal?.total_vendas || 0);
+            elementos.vendasMes.textContent = UI.formatCurrency(this.data.vendasPeriodo || 0);
         }
-        
         if (elementos.estoqueBaixo) {
             elementos.estoqueBaixo.textContent = this.data.estoqueBaixo?.length || 0;
         }
-        
         if (elementos.ticketMedio) {
-            const qtd = this.data.lucroDiario?.quantidade_vendas || 1;
-            const ticket = (this.data.lucroDiario?.total_vendas || 0) / qtd;
+            const ticket = this.data.quantidadeHoje > 0 ? (this.data.vendasHoje / this.data.quantidadeHoje) : 0;
             elementos.ticketMedio.textContent = UI.formatCurrency(ticket);
         }
     },
     
-    inicializarGraficos() {
-        // Destruir gráficos existentes com segurança
-        try {
-            if (this.charts.vendas) {
-                this.charts.vendas.destroy();
-                this.charts.vendas = null;
-            }
-        } catch (e) {
-            console.log('✅ Gráfico de vendas limpo');
-        }
+    async atualizarPagamentos() {
+        const container = document.getElementById('pagamentosHoje');
+        if (!container) return;
         
         try {
-            if (this.charts.produtos) {
-                this.charts.produtos.destroy();
-                this.charts.produtos = null;
+            const hoje = new Date().toISOString().split('T')[0];
+            const response = await API.listarVendas({ 
+                data_inicio: hoje,
+                data_fim: hoje,
+                limite: 100
+            });
+            
+            const vendas = response.vendas || [];
+            
+            const pagamentos = {};
+            vendas.forEach(v => {
+                const forma = v.forma_pagamento || 'Outros';
+                if (!pagamentos[forma]) {
+                    pagamentos[forma] = {
+                        forma: forma,
+                        quantidade: 0,
+                        total: 0
+                    };
+                }
+                pagamentos[forma].quantidade += 1;
+                pagamentos[forma].total += v.total || 0;
+            });
+            
+            const pagamentosArray = Object.values(pagamentos);
+            
+            if (pagamentosArray.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 20px;">Nenhuma venda hoje</p>';
+                return;
             }
-        } catch (e) {
-            console.log('✅ Gráfico de produtos limpo');
+            
+            container.innerHTML = `
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+                    ${pagamentosArray.map(p => `
+                        <div style="background: var(--bg-tertiary); padding: 15px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 18px; font-weight: bold; color: var(--accent-primary);">${p.forma}</div>
+                            <div style="font-size: 20px; font-weight: 600; margin: 5px 0;">${UI.formatCurrency(p.total)}</div>
+                            <div style="font-size: 12px; color: var(--text-muted);">${p.quantidade} venda(s)</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        } catch (error) {
+            console.error('Erro ao carregar pagamentos:', error);
+            container.innerHTML = '<p style="color: var(--text-muted);">Erro ao carregar dados</p>';
         }
-        
-        // Limpar os canvases antes de criar novos
-        const canvasVendas = document.getElementById('graficoVendasSemana');
-        if (canvasVendas) {
-            const ctx = canvasVendas.getContext('2d');
-            ctx.clearRect(0, 0, canvasVendas.width, canvasVendas.height);
-        }
-        
-        const canvasProdutos = document.getElementById('graficoProdutos');
-        if (canvasProdutos) {
-            const ctx = canvasProdutos.getContext('2d');
-            ctx.clearRect(0, 0, canvasProdutos.width, canvasProdutos.height);
-        }
-        
-        // Pequeno timeout para garantir que os canvases foram limpos
-        setTimeout(() => {
-            this.criarGraficos();
-        }, 100);
     },
     
-    criarGraficos() {
-        // Gráfico de Vendas por Dia
+    inicializarGraficos() {
+        this.recriarCanvases();
+        
         const ctxVendas = document.getElementById('graficoVendasSemana');
         if (ctxVendas) {
             try {
                 this.charts.vendas = new Chart(ctxVendas, {
                     type: 'line',
                     data: {
-                        labels: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'],
+                        labels: this.data.vendasPorDia?.map(d => d.data) || ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'],
                         datasets: [{
                             label: 'Vendas (R$)',
-                            data: this.data.vendasPeriodo.map(d => d.total),
+                            data: this.data.vendasPorDia?.map(d => d.total) || [0,0,0,0,0,0,0],
                             borderColor: '#c4a747',
                             backgroundColor: 'rgba(196, 167, 71, 0.1)',
                             borderWidth: 3,
@@ -232,14 +410,7 @@ const DashboardAdmin = {
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                callbacks: {
-                                    label: (context) => `Vendas: ${UI.formatCurrency(context.raw)}`
-                                }
-                            }
-                        },
+                        plugins: { legend: { display: false } },
                         scales: {
                             y: {
                                 grid: { color: '#2d3540' },
@@ -260,9 +431,8 @@ const DashboardAdmin = {
             }
         }
         
-        // Gráfico de Produtos Mais Vendidos
         const ctxProdutos = document.getElementById('graficoProdutos');
-        if (ctxProdutos) {
+        if (ctxProdutos && this.data.produtosMaisVendidos.length > 0) {
             try {
                 this.charts.produtos = new Chart(ctxProdutos, {
                     type: 'bar',
@@ -280,30 +450,16 @@ const DashboardAdmin = {
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                callbacks: {
-                                    label: (context) => `${context.raw} unidades`
-                                }
-                            }
-                        },
+                        plugins: { legend: { display: false } },
                         scales: {
                             y: {
                                 beginAtZero: true,
                                 grid: { color: '#2d3540' },
-                                ticks: {
-                                    color: '#94a3b8',
-                                    stepSize: 1
-                                }
+                                ticks: { color: '#94a3b8', stepSize: 1 }
                             },
                             x: {
                                 grid: { display: false },
-                                ticks: { 
-                                    color: '#94a3b8',
-                                    maxRotation: 45,
-                                    minRotation: 45
-                                }
+                                ticks: { color: '#94a3b8', maxRotation: 45 }
                             }
                         }
                     }
@@ -315,9 +471,8 @@ const DashboardAdmin = {
     },
     
     atualizarGraficos() {
-        // Verificar se os gráficos existem e atualizar
-        if (this.charts.vendas && this.data.vendasPeriodo.length > 0) {
-            this.charts.vendas.data.datasets[0].data = this.data.vendasPeriodo.map(d => d.total);
+        if (this.charts.vendas && this.data.vendasPorDia) {
+            this.charts.vendas.data.datasets[0].data = this.data.vendasPorDia.map(d => d.total);
             this.charts.vendas.update();
         }
         
@@ -330,29 +485,39 @@ const DashboardAdmin = {
         }
     },
     
+    recriarCanvases() {
+        const recriarCanvas = (id) => {
+            const oldCanvas = document.getElementById(id);
+            if (oldCanvas) {
+                const parent = oldCanvas.parentNode;
+                const newCanvas = document.createElement('canvas');
+                newCanvas.id = id;
+                newCanvas.style.width = '100%';
+                newCanvas.style.height = '100%';
+                parent.replaceChild(newCanvas, oldCanvas);
+            }
+        };
+        
+        recriarCanvas('graficoVendasSemana');
+        recriarCanvas('graficoProdutos');
+    },
+    
     mostrarEstoqueBaixo() {
         const container = document.getElementById('estoqueBaixoLista');
         if (!container) return;
         
         if (!this.data.estoqueBaixo || this.data.estoqueBaixo.length === 0) {
-            container.innerHTML = `
-                <div style="color: var(--text-muted); text-align: center; padding: 20px;">
-                    ✅ Todos os produtos estão com estoque adequado
-                </div>
-            `;
+            container.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding: 20px;">✅ Todos os produtos estão com estoque adequado</div>`;
             return;
         }
         
         container.innerHTML = this.data.estoqueBaixo.slice(0, 5).map(p => `
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid var(--border-color);">
                 <div>
-                    <strong style="color: var(--text-primary);">${p.nome}</strong>
-                    <br>
+                    <strong>${p.nome}</strong><br>
                     <small style="color: var(--text-muted);">Estoque: ${p.quantidade} unidades</small>
                 </div>
-                <button class="btn btn-primary btn-sm" onclick="Produtos.abrirModalEstoque(${p.id})">
-                    Repor
-                </button>
+                <button class="btn btn-primary btn-sm" onclick="Produtos.abrirModalEstoque(${p.id})">Repor</button>
             </div>
         `).join('');
     },
@@ -361,30 +526,20 @@ const DashboardAdmin = {
         const container = document.getElementById('produtoMaisVendido');
         if (!container) return;
         
-        if (this.data.produtosMaisVendidos && this.data.produtosMaisVendidos.length > 0) {
+        if (this.data.produtosMaisVendidos.length > 0) {
             const top3 = this.data.produtosMaisVendidos.slice(0, 3);
             container.innerHTML = `
                 <div style="padding: 10px;">
                     ${top3.map((p, index) => `
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: ${index < top3.length-1 ? '1px solid var(--border-color)' : 'none'};">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <span style="color: var(--accent-primary); font-weight: bold; font-size: 16px;">${index+1}º</span>
-                                <strong style="color: var(--text-primary);">${p.nome}</strong>
-                            </div>
-                            <span style="color: var(--text-muted); background: var(--bg-tertiary); padding: 4px 10px; border-radius: 20px; font-size: 13px;">
-                                ${p.quantidade} vendidos
-                            </span>
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: ${index < top3.length-1 ? '1px solid var(--border-color)' : 'none'};">
+                            <div><span style="color: var(--accent-primary); font-weight: bold;">${index+1}º</span> ${p.nome}</div>
+                            <span style="color: var(--text-muted);">${p.quantidade} vendidos</span>
                         </div>
                     `).join('')}
                 </div>
             `;
         } else {
-            container.innerHTML = `
-                <div style="color: var(--text-muted); text-align: center; padding: 30px;">
-                    <div style="font-size: 48px; margin-bottom: 10px;">📊</div>
-                    <p>Nenhuma venda registrada ainda</p>
-                </div>
-            `;
+            container.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding: 20px;">Nenhuma venda registrada</div>`;
         }
     },
     
@@ -393,67 +548,33 @@ const DashboardAdmin = {
         if (!tbody) return;
         
         if (!this.data.ultimasVendas || this.data.ultimasVendas.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 30px;">Nenhuma venda recente</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">Nenhuma venda recente</td></tr>';
             return;
         }
         
         tbody.innerHTML = this.data.ultimasVendas.slice(0, 5).map(v => `
             <tr>
-                <td style="font-weight: 500;">#${v.id}</td>
+                <td>#${v.id}</td>
                 <td>${new Date(v.data_venda).toLocaleString('pt-BR')}</td>
-                <td style="color: var(--accent-primary); font-weight: 600;">${UI.formatCurrency(v.total)}</td>
-                <td><span class="badge badge-success" style="padding: 4px 12px;">${v.forma_pagamento || 'N/A'}</span></td>
+                <td>${UI.formatCurrency(v.total)}</td>
+                <td><span class="badge badge-success">${v.forma_pagamento || 'N/A'}</span></td>
             </tr>
         `).join('');
     },
     
     configurarAtualizacao() {
-        // Limpar intervalo anterior se existir
-        if (this.refreshInterval) {
-            clearInterval(this.refreshInterval);
-        }
-        
-        // Atualizar a cada 30 segundos
+        if (this.refreshInterval) clearInterval(this.refreshInterval);
         this.refreshInterval = setInterval(() => {
-            if (document.visibilityState === 'visible') {
-                this.carregarDados();
-            }
+            if (document.visibilityState === 'visible') this.carregarDados();
         }, 30000);
-    },
-    
-    // Função para destruir o componente (útil para trocar de página)
-    destroy() {
-        if (this.refreshInterval) {
-            clearInterval(this.refreshInterval);
-            this.refreshInterval = null;
-        }
-        
-        try {
-            if (this.charts.vendas) {
-                this.charts.vendas.destroy();
-                this.charts.vendas = null;
-            }
-        } catch (e) {}
-        
-        try {
-            if (this.charts.produtos) {
-                this.charts.produtos.destroy();
-                this.charts.produtos = null;
-            }
-        } catch (e) {}
     }
 };
 
-// Inicializar quando a página carregar
+// Inicializar
 document.addEventListener('DOMContentLoaded', () => {
     if (window.location.pathname.includes('dashboard.html')) {
-        // Garantir que qualquer instância anterior seja destruída
-        if (window.DashboardAdmin) {
-            window.DashboardAdmin.destroy?.();
-        }
         DashboardAdmin.init();
     }
 });
 
-// Exportar para uso global
 window.DashboardAdmin = DashboardAdmin;
