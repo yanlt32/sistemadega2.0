@@ -690,20 +690,6 @@ const Produtos = {
                 this.fecharModal();
             }
         });
-
-        // Leitor de código de barras no cadastro
-        const btnLerCodigoProduto = document.getElementById('btnLerCodigoProduto');
-        if (btnLerCodigoProduto && this.isAdmin) {
-            btnLerCodigoProduto.addEventListener('click', () => {
-                if (window.BarcodeReader) {
-                    BarcodeReader.abrir((codigo) => {
-                        document.getElementById('produtoCodigoBarras').value = codigo;
-                    });
-                } else {
-                    App.showNotification('Leitor não disponível', 'warning');
-                }
-            });
-        }
     },
     
     async carregarCategorias() {
@@ -1864,13 +1850,6 @@ const Relatorios = {
     async carregar(periodo = 'mes') {
         try {
             UI.showLoading();
-            
-            // Verificar se os elementos existem
-            const produtoEl = document.getElementById('produtoMaisVendido');
-            const categoriaEl = document.getElementById('categoriaMaisVendida');
-            
-            if (produtoEl) produtoEl.innerHTML = '<p style="text-align: center;">Carregando...</p>';
-            if (categoriaEl) categoriaEl.innerHTML = '<p style="text-align: center;">Carregando...</p>';
             
             const [lucroDiario, lucroMensal, produtoMaisVendido, categoriaMaisVendida, vendasPeriodo] = 
                 await Promise.all([

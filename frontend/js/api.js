@@ -3,7 +3,8 @@ const API = {
     get baseURL() {
         // Se estiver no Render (produção)
         if (window.location.hostname.includes('onrender.com')) {
-            return `https://${window.location.hostname}/api`;
+            // Usar a mesma origem (protocolo e hostname)
+            return `${window.location.protocol}//${window.location.hostname}/api`;
         }
         // Se estiver em desenvolvimento local
         return `http://${window.location.hostname}:3000/api`;
@@ -17,8 +18,15 @@ const API = {
         const url = `${this.baseURL}${endpoint}`;
         const token = this.getToken();
         
+        console.log('📡 Requisição:', {
+            url,
+            method: options.method || 'GET',
+            hasToken: !!token
+        });
+        
         const headers = {
             'Content-Type': 'application/json',
+            'Accept': 'application/json',
             ...options.headers
         };
         
@@ -29,28 +37,48 @@ const API = {
         try {
             const response = await fetch(url, {
                 ...options,
-                headers
+                headers,
+                credentials: 'same-origin'
             });
             
-            if (response.status === 401) {
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
-                if (!window.location.pathname.includes('index.html') && 
-                    window.location.pathname !== '/') {
-                    window.location.href = '/';
+            // Tratar erros de rede
+            if (!response.ok) {
+                // Tentar parsear o erro como JSON
+                let errorData;
+                try {
+                    errorData = await response.json();
+                } catch (e) {
+                    errorData = { error: response.statusText };
                 }
-                throw new Error('Sessão expirada');
+                
+                // Se for 401 (não autorizado)
+                if (response.status === 401) {
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    if (!window.location.pathname.includes('index.html') && 
+                        window.location.pathname !== '/') {
+                        window.location.href = '/';
+                    }
+                    throw new Error(errorData.error || 'Sessão expirada');
+                }
+                
+                // Outros erros
+                throw new Error(errorData.error || `Erro ${response.status}: ${response.statusText}`);
+            }
+            
+            // Se não houver conteúdo, retornar vazio
+            if (response.status === 204) {
+                return { success: true };
             }
             
             const data = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(data.error || 'Erro na requisição');
-            }
-            
             return data;
         } catch (error) {
-            console.error('API Error:', error);
+            console.error('❌ API Error:', error);
+            // Se for erro de rede (CORS, servidor offline)
+            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                throw new Error('Erro de conexão com o servidor. Verifique sua internet ou tente novamente mais tarde.');
+            }
             throw error;
         }
     },
@@ -65,6 +93,12 @@ const API = {
         });
     },
     
+    async logout() {
+        return this.request('/auth/logout', {
+            method: 'POST'
+        });
+    },
+    
     async verificarToken() {
         return this.request('/auth/verificar');
     },
@@ -75,6 +109,10 @@ const API = {
     async listarProdutos(params = {}) {
         const queryString = new URLSearchParams(params).toString();
         return this.request(`/produtos${queryString ? '?' + queryString : ''}`);
+    },
+    
+    async buscarProduto(id) {
+        return this.request(`/produtos/${id}`);
     },
     
     async criarProduto(produto) {
@@ -154,6 +192,10 @@ const API = {
         return this.request('/categorias');
     },
     
+    async buscarCategoria(id) {
+        return this.request(`/categorias/${id}`);
+    },
+    
     async criarCategoria(categoria) {
         return this.request('/categorias', {
             method: 'POST',
@@ -172,6 +214,10 @@ const API = {
         return this.request(`/categorias/${id}`, {
             method: 'DELETE'
         });
+    },
+    
+    async listarTiposCategorias() {
+        return this.request('/categorias/tipos');
     },
 
     // ============================================
@@ -216,16 +262,28 @@ const API = {
         return this.request('/relatorios/lucro-mensal');
     },
     
-    async produtoMaisVendido() {
-        return this.request('/relatorios/produto-mais-vendido');
+    async relatorioCompleto(dataInicio, dataFim) {
+        return this.request(`/relatorios/completo?data_inicio=${dataInicio}&data_fim=${dataFim}`);
     },
     
-    async categoriaMaisVendida() {
-        return this.request('/relatorios/categoria-mais-vendida');
+    async relatorioMensalDetalhado(mes, ano) {
+        return this.request(`/relatorios/mensal-detalhado?mes=${mes}&ano=${ano}`);
     },
     
-    async vendasPorPeriodo(periodo) {
-        return this.request(`/relatorios/vendas-por-periodo?periodo=${periodo}`);
+    async relatorioAnual(ano) {
+        return this.request(`/relatorios/anual?ano=${ano}`);
+    },
+    
+    async produtosMaisVendidos(dataInicio, dataFim, limit = 20) {
+        let url = `/relatorios/produtos-mais-vendidos?limit=${limit}`;
+        if (dataInicio && dataFim) {
+            url += `&data_inicio=${dataInicio}&data_fim=${dataFim}`;
+        }
+        return this.request(url);
+    },
+    
+    async faturamentoPeriodo(dataInicio, dataFim) {
+        return this.request(`/relatorios/faturamento-periodo?data_inicio=${dataInicio}&data_fim=${dataFim}`);
     },
 
     // ============================================
@@ -291,6 +349,10 @@ const API = {
         return this.request(`/gastos${queryString ? '?' + queryString : ''}`);
     },
 
+    async buscarGasto(id) {
+        return this.request(`/gastos/${id}`);
+    },
+
     async criarGasto(gasto) {
         return this.request('/gastos', {
             method: 'POST',
@@ -312,7 +374,7 @@ const API = {
     },
 
     async listarCategoriasGastos() {
-        return this.request('/gastos/categorias/listar');
+        return this.request('/gastos/categorias');
     },
 
     async criarCategoriaGasto(categoria) {
@@ -332,12 +394,16 @@ const API = {
         return this.request('/gastos/formas-pagamento');
     },
 
-    async resumoMensal(params = {}) {
+    async resumoMensalGastos(params = {}) {
         const queryString = new URLSearchParams(params).toString();
         return this.request(`/gastos/resumo/mensal${queryString ? '?' + queryString : ''}`);
     },
 
-    async exportarResumo(params = {}) {
+    async resumoSimplificado(periodo = 'mes') {
+        return this.request(`/gastos/resumo/simplificado?periodo=${periodo}`);
+    },
+
+    async exportarResumoGastos(params = {}) {
         const queryString = new URLSearchParams(params).toString();
         const url = `${this.baseURL}/gastos/exportar/resumo${queryString ? '?' + queryString : ''}`;
         const token = this.getToken();
@@ -375,6 +441,10 @@ const API = {
     // ============================================
     async listarDoses() {
         return this.request('/doses');
+    },
+
+    async buscarDose(id) {
+        return this.request(`/doses/${id}`);
     },
 
     async criarDose(dose) {
@@ -436,6 +506,21 @@ const API = {
     },
 
     // ============================================
+    // DASHBOARD
+    // ============================================
+    async dashboardResumo() {
+        return this.request('/dashboard/resumo');
+    },
+
+    async dashboardVendasHoje() {
+        return this.request('/dashboard/vendas-hoje');
+    },
+
+    async dashboardProdutosEsgotando() {
+        return this.request('/dashboard/produtos-esgotando');
+    },
+
+    // ============================================
     // DOWNLOAD DE ARQUIVOS
     // ============================================
     async downloadFile(url, filename) {
@@ -469,3 +554,8 @@ const API = {
         }
     }
 };
+
+// Exportar para uso global
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = API;
+}
