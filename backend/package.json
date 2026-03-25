@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "postinstall": "npm install sqlite3 --build-from-source",
     "build": "npm install",
     "dev": "nodemon server.js",
     "migrate": "node migration.js",
@@ -20,7 +21,7 @@
     "glob": "^13.0.6",
     "jsonwebtoken": "^9.0.2",
     "socket.io": "^4.8.3",
-    "sqlite3": "^5.0.11"
+    "sqlite3": "^5.1.7"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
