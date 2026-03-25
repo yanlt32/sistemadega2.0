@@ -333,11 +333,11 @@ const produtoController = {
         }
     },
 
-    // Forçar exclusão de produto (remove todas as dependências) - CORRIGIDO
+    // Forçar exclusão de produto (remove TODAS as dependências) - VERSÃO COM REMOÇÃO COMPLETA
     forcarExclusaoProduto: (req, res) => {
         try {
             const { id } = req.params;
-            const { confirmar, senha_admin } = req.body;
+            const { confirmar } = req.body;
             
             if (!confirmar) {
                 return res.status(400).json({ error: 'Confirmação necessária para forçar exclusão' });
@@ -349,71 +349,88 @@ const produtoController = {
                 return res.status(403).json({ error: 'Apenas administradores podem forçar exclusão' });
             }
             
-            console.log('Forçando exclusão do produto ID:', id);
+            console.log('=========================================');
+            console.log('🚨 FORÇANDO EXCLUSÃO DO PRODUTO ID:', id);
+            console.log('=========================================');
+            
+            // Listar todas as dependências antes de remover
+            const antes = {
+                itens_venda: db.prepare('SELECT COUNT(*) as count FROM itens_venda WHERE produto_id = ?').get(id).count,
+                doses: db.prepare('SELECT COUNT(*) as count FROM doses WHERE produto_id = ?').get(id).count,
+                itens_combo: db.prepare('SELECT COUNT(*) as count FROM itens_combo WHERE produto_id = ?').get(id).count,
+                movimentacoes: db.prepare('SELECT COUNT(*) as count FROM movimentacoes_estoque WHERE produto_id = ?').get(id).count
+            };
+            
+            console.log('📊 DEPENDÊNCIAS ENCONTRADAS:');
+            console.log('   - itens_venda:', antes.itens_venda);
+            console.log('   - doses:', antes.doses);
+            console.log('   - itens_combo:', antes.itens_combo);
+            console.log('   - movimentacoes_estoque:', antes.movimentacoes);
             
             const transaction = db.transaction(() => {
-                // 1. Verificar e remover referências em itens_venda
-                const itensVenda = db.prepare('SELECT COUNT(*) as count FROM itens_venda WHERE produto_id = ?').get(id);
-                if (itensVenda.count > 0) {
-                    console.log(`Removendo ${itensVenda.count} itens de venda vinculados`);
-                    db.prepare('DELETE FROM itens_venda WHERE produto_id = ?').run(id);
+                let registrosRemovidos = 0;
+                
+                // 1. Remover itens de venda
+                if (antes.itens_venda > 0) {
+                    const result = db.prepare('DELETE FROM itens_venda WHERE produto_id = ?').run(id);
+                    registrosRemovidos += result.changes;
+                    console.log(`   ✅ Removidos ${result.changes} itens de venda`);
                 }
                 
-                // 2. Verificar e remover referências em doses
-                const doses = db.prepare('SELECT COUNT(*) as count FROM doses WHERE produto_id = ?').get(id);
-                if (doses.count > 0) {
-                    console.log(`Removendo ${doses.count} doses vinculadas`);
-                    db.prepare('DELETE FROM doses WHERE produto_id = ?').run(id);
+                // 2. Remover doses
+                if (antes.doses > 0) {
+                    const result = db.prepare('DELETE FROM doses WHERE produto_id = ?').run(id);
+                    registrosRemovidos += result.changes;
+                    console.log(`   ✅ Removidas ${result.changes} doses`);
                 }
                 
-                // 3. Verificar e remover referências em itens_combo
-                const combos = db.prepare('SELECT COUNT(*) as count FROM itens_combo WHERE produto_id = ?').get(id);
-                if (combos.count > 0) {
-                    console.log(`Removendo ${combos.count} referências em combos`);
-                    db.prepare('DELETE FROM itens_combo WHERE produto_id = ?').run(id);
+                // 3. Remover itens de combo
+                if (antes.itens_combo > 0) {
+                    const result = db.prepare('DELETE FROM itens_combo WHERE produto_id = ?').run(id);
+                    registrosRemovidos += result.changes;
+                    console.log(`   ✅ Removidos ${result.changes} itens de combo`);
                 }
                 
-                // 4. Manter movimentações de estoque mas marcar como produto excluído
-                const movimentacoes = db.prepare('SELECT COUNT(*) as count FROM movimentacoes_estoque WHERE produto_id = ?').get(id);
-                if (movimentacoes.count > 0) {
-                    console.log(`Marcando ${movimentacoes.count} movimentações como produto excluído`);
-                    // Atualizar observacao apenas se a coluna existir
-                    try {
-                        db.prepare(`
-                            UPDATE movimentacoes_estoque 
-                            SET observacao = COALESCE(observacao, '') || ' (Produto excluído ID: ' || ? || ')'
-                            WHERE produto_id = ?
-                        `).run(id, id);
-                    } catch (err) {
-                        console.log('Não foi possível atualizar observação (coluna pode não existir)');
-                    }
+                // 4. Remover movimentações de estoque (AGORA DELETA TAMBÉM)
+                if (antes.movimentacoes > 0) {
+                    const result = db.prepare('DELETE FROM movimentacoes_estoque WHERE produto_id = ?').run(id);
+                    registrosRemovidos += result.changes;
+                    console.log(`   ✅ Removidas ${result.changes} movimentações de estoque`);
                 }
                 
                 // 5. Finalmente excluir o produto
                 const result = db.prepare('DELETE FROM produtos WHERE id = ?').run(id);
+                registrosRemovidos += result.changes;
+                console.log(`   ✅ Produto excluído`);
                 
-                return result.changes;
+                return registrosRemovidos;
             });
             
-            const changes = transaction();
+            const totalRemovidos = transaction();
             
-            if (changes === 0) {
+            console.log('=========================================');
+            console.log(`✅ EXCLUSÃO FORÇADA CONCLUÍDA!`);
+            console.log(`   Total de registros removidos: ${totalRemovidos}`);
+            console.log('=========================================');
+            
+            if (totalRemovidos === 0) {
                 return res.status(404).json({ error: 'Produto não encontrado' });
             }
             
-            console.log('Produto forçado excluído com sucesso:', id);
-            
             if (req.io) {
-                req.io.emit('produto:excluido', { id, forcado: true });
+                req.io.emit('produto:excluido', { id, forcado: true, registrosRemovidos: totalRemovidos });
             }
             
             res.json({ 
                 message: 'Produto excluído com sucesso (dependências removidas)',
-                forcado: true
+                forcado: true,
+                registrosRemovidos: totalRemovidos
             });
             
         } catch (error) {
-            console.error('Erro ao forçar exclusão do produto:', error);
+            console.error('❌ ERRO AO FORÇAR EXCLUSÃO:');
+            console.error('   Mensagem:', error.message);
+            console.error('   Stack:', error.stack);
             res.status(500).json({ error: error.message });
         }
     },
@@ -423,7 +440,7 @@ const produtoController = {
         try {
             const produtos = db.prepare(`
                 SELECT * FROM produtos 
-                WHERE quantidade < 5 
+                WHERE quantité < 5 
                 ORDER BY quantidade
             `).all();
             
