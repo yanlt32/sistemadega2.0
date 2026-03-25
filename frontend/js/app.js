@@ -113,10 +113,9 @@ class App {
             return;
         }
         
-        // RELATÓRIOS - apenas admin (USAR O MÓDULO EXTERNO)
+        // RELATÓRIOS - apenas admin
         if (path.includes('relatorios.html')) {
             if (user?.role === 'admin') {
-                // Verificar se o módulo externo existe, senão usar o interno
                 if (window.RelatoriosExternos) {
                     window.RelatoriosExternos.init();
                 } else if (window.Relatorios) {
@@ -497,7 +496,6 @@ const Dashboard = {
     },
     
     setupCharts() {
-        // Destruir gráficos existentes
         if (this.charts.vendas) {
             this.charts.vendas.destroy();
             this.charts.vendas = null;
@@ -611,7 +609,7 @@ const Dashboard = {
 };
 
 // ============================================
-// MÓDULO DE PRODUTOS
+// MÓDULO DE PRODUTOS (COM EXCLUSÃO APRIMORADA)
 // ============================================
 const Produtos = {
     paginaAtual: 1,
@@ -987,21 +985,92 @@ const Produtos = {
         }
     },
     
+    // MÉTODO EXCLUIR APRIMORADO COM SUPORTE A EXCLUSÃO FORÇADA
     async excluir(id) {
         if (!this.isAdmin) {
             App.showNotification('Apenas administradores podem excluir produtos', 'warning');
             return;
         }
         
-        if (!confirm('Tem certeza que deseja excluir este produto?')) return;
+        const produto = this.produtos.find(p => p.id === id);
+        if (!produto) return;
         
         try {
             UI.showLoading();
             await API.excluirProduto(id);
-            App.showNotification('Produto excluído com sucesso!', 'success');
+            App.showNotification('✅ Produto excluído com sucesso!', 'success');
             await this.carregar();
         } catch (error) {
-            App.showNotification(error.message, 'danger');
+            console.error('Erro ao excluir produto:', error);
+            
+            // Extrair informações do erro
+            const errorMsg = error.message || '';
+            const tipo = error.tipo;
+            const quantidade = error.quantidade;
+            
+            // 1. Erro de vendas vinculadas
+            if (errorMsg.includes('vendas vinculadas') || tipo === 'vendas') {
+                App.showNotification(
+                    `❌ Não é possível excluir "${produto.nome}". Este produto já foi vendido ${quantidade || ''} vez(es).`, 
+                    'danger'
+                );
+            }
+            // 2. Erro de doses vinculadas
+            else if (errorMsg.includes('doses vinculadas') || tipo === 'doses') {
+                const dosesInfo = error.doses ? ` (IDs: ${error.doses})` : '';
+                App.showNotification(
+                    `❌ Não é possível excluir "${produto.nome}". Exclua as doses vinculadas primeiro.${dosesInfo}`, 
+                    'danger'
+                );
+            }
+            // 3. Erro de combos vinculados
+            else if (errorMsg.includes('combos vinculados') || tipo === 'combos') {
+                App.showNotification(
+                    `❌ Não é possível excluir "${produto.nome}". Remova o produto dos combos primeiro.`, 
+                    'danger'
+                );
+            }
+            // 4. Erro de movimentações/histórico - perguntar se quer forçar
+            else if (errorMsg.includes('movimentações') || errorMsg.includes('histórico') || tipo === 'movimentacoes' || error.podeForcar) {
+                const confirmarForcar = confirm(
+                    `⚠️ O produto "${produto.nome}" possui histórico de movimentações de estoque.\n\n` +
+                    `Deseja forçar a exclusão? Isso manterá o histórico mas removerá o produto do cadastro.\n\n` +
+                    `Esta ação requer senha de administrador.`
+                );
+                
+                if (confirmarForcar) {
+                    const senha = prompt('Digite sua senha de administrador para confirmar a exclusão:');
+                    if (senha && senha.trim()) {
+                        try {
+                            UI.showLoading();
+                            await API.forcarExclusaoProduto(id, senha);
+                            App.showNotification('✅ Produto excluído com sucesso (histórico mantido)!', 'success');
+                            await this.carregar();
+                        } catch (forceError) {
+                            if (forceError.message.includes('senha') || forceError.message.includes('admin')) {
+                                App.showNotification('❌ Senha de administrador inválida!', 'danger');
+                            } else {
+                                App.showNotification('❌ ' + forceError.message, 'danger');
+                            }
+                        } finally {
+                            UI.hideLoading();
+                        }
+                    } else {
+                        App.showNotification('❌ Exclusão cancelada - senha não fornecida', 'warning');
+                    }
+                }
+            }
+            // 5. Erro de chave estrangeira genérico
+            else if (errorMsg.includes('FOREIGN KEY')) {
+                App.showNotification(
+                    `❌ Não foi possível excluir "${produto.nome}". O produto possui dependências em outras partes do sistema.`, 
+                    'danger'
+                );
+            }
+            // 6. Outros erros
+            else {
+                App.showNotification('❌ Erro ao excluir: ' + errorMsg, 'danger');
+            }
         } finally {
             UI.hideLoading();
         }
@@ -1539,7 +1608,7 @@ const CategoriasManager = {
                         <button class="btn btn-primary" onclick="CategoriasManager.abrirModalCategoria()">
                             Criar primeira categoria
                         </button>
-                    </td>
+                                        </td>
                 </tr>
             `;
             return;
@@ -1821,7 +1890,7 @@ const CategoriasManager = {
 };
 
 // ============================================
-// MÓDULO DE RELATÓRIOS (APENAS ADMIN) - VERSÃO SIMPLIFICADA
+// MÓDULO DE RELATÓRIOS (APENAS ADMIN)
 // ============================================
 const Relatorios = {
     charts: {},

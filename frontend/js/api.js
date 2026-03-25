@@ -62,8 +62,17 @@ const API = {
                     throw new Error(errorData.error || 'Sessão expirada');
                 }
                 
-                // Outros erros
-                throw new Error(errorData.error || `Erro ${response.status}: ${response.statusText}`);
+                // Outros erros - incluir dados adicionais se disponíveis
+                const error = new Error(errorData.error || `Erro ${response.status}: ${response.statusText}`);
+                // Adicionar dados extras do erro (como quantidade, tipo, etc)
+                if (errorData.quantidade) error.quantidade = errorData.quantidade;
+                if (errorData.tipo) error.tipo = errorData.tipo;
+                if (errorData.doses) error.doses = errorData.doses;
+                if (errorData.combo_ids) error.combo_ids = errorData.combo_ids;
+                if (errorData.venda_ids) error.venda_ids = errorData.venda_ids;
+                if (errorData.podeForcar) error.podeForcar = errorData.podeForcar;
+                
+                throw error;
             }
             
             // Se não houver conteúdo, retornar vazio
@@ -139,6 +148,14 @@ const API = {
     async excluirProduto(id) {
         return this.request(`/produtos/${id}`, {
             method: 'DELETE'
+        });
+    },
+    
+    // NOVA FUNÇÃO: Forçar exclusão de produto (remove dependências)
+    async forcarExclusaoProduto(id, senha_admin) {
+        return this.request(`/produtos/${id}/forcar`, {
+            method: 'DELETE',
+            body: JSON.stringify({ confirmar: true, senha_admin })
         });
     },
     

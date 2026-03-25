@@ -92,7 +92,7 @@ const produtoController = {
         try {
             const { nome, categoria_id, tipo_id, preco_custo, preco_venda, quantidade, codigo_barras, unidade_medida } = req.body;
 
-            console.log('Dados recebidos:', req.body); // Debug
+            console.log('Dados recebidos:', req.body);
 
             if (!nome || !categoria_id || !tipo_id || !preco_custo || !preco_venda) {
                 return res.status(400).json({ 
@@ -130,7 +130,7 @@ const produtoController = {
 
             const produtoId = transaction();
 
-            console.log('Produto criado com ID:', produtoId); // Debug
+            console.log('Produto criado com ID:', produtoId);
 
             res.json({ 
                 id: produtoId, 
@@ -186,14 +186,13 @@ const produtoController = {
             } else if (tipo === 'saida') {
                 novaQuantidade = produto.quantidade - quantidade;
             } else {
-                novaQuantidade = quantidade; // Ajuste manual
+                novaQuantidade = quantidade;
             }
 
             if (novaQuantidade < 0) {
                 return res.status(400).json({ error: 'Estoque não pode ficar negativo' });
             }
 
-            // Iniciar transação
             const transaction = db.transaction(() => {
                 db.prepare(`
                     UPDATE produtos SET quantidade = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
@@ -221,44 +220,194 @@ const produtoController = {
         }
     },
 
-    // Excluir produto
+    // Excluir produto (com verificação detalhada)
     excluirProduto: (req, res) => {
         try {
             const { id } = req.params;
+            
+            console.log('Tentando excluir produto ID:', id);
 
-            // Verificar se existem vendas vinculadas a este produto
-            const vendas = db.prepare('SELECT COUNT(*) as count FROM itens_venda WHERE produto_id = ?').get(id);
+            // 1. Verificar vendas
+            const vendas = db.prepare(`
+                SELECT COUNT(*) as count, 
+                       GROUP_CONCAT(DISTINCT venda_id) as venda_ids
+                FROM itens_venda 
+                WHERE produto_id = ?
+            `).get(id);
             
             if (vendas.count > 0) {
+                console.log(`Produto possui ${vendas.count} vendas vinculadas. IDs: ${vendas.venda_ids}`);
                 return res.status(400).json({ 
                     error: 'Não é possível excluir produto com vendas vinculadas',
-                    quantidade: vendas.count 
+                    message: `Este produto foi vendido ${vendas.count} vezes. Para excluí-lo, primeiro cancele as vendas relacionadas.`,
+                    quantidade: vendas.count,
+                    venda_ids: vendas.venda_ids,
+                    tipo: 'vendas'
                 });
             }
 
-            // Verificar se existem doses vinculadas
-            const doses = db.prepare('SELECT COUNT(*) as count FROM doses WHERE produto_id = ?').get(id);
+            // 2. Verificar doses
+            const doses = db.prepare(`
+                SELECT COUNT(*) as count, 
+                       GROUP_CONCAT(id) as dose_ids,
+                       GROUP_CONCAT(nome) as dose_nomes
+                FROM doses 
+                WHERE produto_id = ?
+            `).get(id);
             
             if (doses.count > 0) {
+                console.log(`Produto possui ${doses.count} doses vinculadas. IDs: ${doses.dose_ids}`);
                 return res.status(400).json({ 
                     error: 'Não é possível excluir produto com doses vinculadas',
-                    quantidade: doses.count 
+                    message: `Este produto possui ${doses.count} dose(s) vinculada(s): ${doses.dose_nomes}. Exclua as doses primeiro.`,
+                    quantidade: doses.count,
+                    doses: doses.dose_ids,
+                    tipo: 'doses'
                 });
             }
 
+            // 3. Verificar combos
+            const combos = db.prepare(`
+                SELECT COUNT(*) as count, 
+                       GROUP_CONCAT(combo_id) as combo_ids
+                FROM itens_combo 
+                WHERE produto_id = ?
+            `).get(id);
+            
+            if (combos.count > 0) {
+                console.log(`Produto está em ${combos.count} combos. IDs: ${combos.combo_ids}`);
+                return res.status(400).json({ 
+                    error: 'Não é possível excluir produto com combos vinculados',
+                    message: `Este produto está em ${combos.count} combo(s). Remova-o dos combos primeiro.`,
+                    quantidade: combos.count,
+                    combo_ids: combos.combo_ids,
+                    tipo: 'combos'
+                });
+            }
+
+            // 4. Verificar movimentações de estoque
+            const movimentacoes = db.prepare(`
+                SELECT COUNT(*) as count 
+                FROM movimentacoes_estoque 
+                WHERE produto_id = ?
+            `).get(id);
+            
+            if (movimentacoes.count > 0) {
+                console.log(`Produto possui ${movimentacoes.count} movimentações de estoque`);
+                // Se houver movimentações, podemos perguntar se deseja excluir mesmo assim
+                return res.status(400).json({ 
+                    error: 'Produto possui histórico de movimentações',
+                    message: `Este produto tem ${movimentacoes.count} movimentações de estoque. Deseja excluir mesmo assim?`,
+                    quantidade: movimentacoes.count,
+                    tipo: 'movimentacoes',
+                    podeForcar: true
+                });
+            }
+
+            // 5. Se não houver dependências, excluir
             const result = db.prepare('DELETE FROM produtos WHERE id = ?').run(id);
             
             if (result.changes === 0) {
                 return res.status(404).json({ error: 'Produto não encontrado' });
             }
             
+            console.log('Produto excluído com sucesso:', id);
+            
             if (req.io) {
                 req.io.emit('produto:excluido', { id });
             }
             
             res.json({ message: 'Produto excluído com sucesso' });
+            
         } catch (error) {
-            console.error('Erro ao excluir produto:', error);
+            console.error('Erro detalhado ao excluir produto:', error);
+            
+            // Verificar se é erro de foreign key
+            if (error.message.includes('FOREIGN KEY')) {
+                return res.status(400).json({ 
+                    error: 'Não foi possível excluir o produto',
+                    message: 'Este produto possui dependências em outras tabelas. Verifique vendas, doses, combos e movimentações.',
+                    detalhes: error.message
+                });
+            }
+            
+            res.status(500).json({ error: error.message });
+        }
+    },
+
+    // Forçar exclusão de produto (remove todas as dependências)
+    forcarExclusaoProduto: (req, res) => {
+        try {
+            const { id } = req.params;
+            const { confirmar, senha_admin } = req.body;
+            
+            if (!confirmar) {
+                return res.status(400).json({ error: 'Confirmação necessária para forçar exclusão' });
+            }
+            
+            // Verificar se é admin (opcional)
+            if (senha_admin) {
+                const user = db.prepare('SELECT role FROM usuarios WHERE id = ?').get(req.usuario.id);
+                if (user?.role !== 'admin') {
+                    return res.status(403).json({ error: 'Apenas administradores podem forçar exclusão' });
+                }
+            }
+            
+            console.log('Forçando exclusão do produto ID:', id);
+            
+            const transaction = db.transaction(() => {
+                // Remover referências em itens_venda (marcar como produto excluído)
+                db.prepare(`
+                    UPDATE itens_venda 
+                    SET produto_id = NULL, observacao = 'Produto excluído (ID original: ' || ? || ')'
+                    WHERE produto_id = ?
+                `).run(id, id);
+                
+                // Remover referências em doses
+                db.prepare(`
+                    UPDATE doses 
+                    SET produto_id = NULL, observacao = 'Produto original excluído'
+                    WHERE produto_id = ?
+                `).run(id);
+                
+                // Remover referências em itens_combo
+                db.prepare(`
+                    DELETE FROM itens_combo 
+                    WHERE produto_id = ?
+                `).run(id);
+                
+                // Manter movimentações de estoque mas marcar como produto excluído
+                db.prepare(`
+                    UPDATE movimentacoes_estoque 
+                    SET observacao = observacao || ' (Produto excluído)'
+                    WHERE produto_id = ?
+                `).run(id);
+                
+                // Finalmente excluir o produto
+                const result = db.prepare('DELETE FROM produtos WHERE id = ?').run(id);
+                
+                return result.changes;
+            });
+            
+            const changes = transaction();
+            
+            if (changes === 0) {
+                return res.status(404).json({ error: 'Produto não encontrado' });
+            }
+            
+            console.log('Produto forçado excluído com sucesso:', id);
+            
+            if (req.io) {
+                req.io.emit('produto:excluido', { id, forcado: true });
+            }
+            
+            res.json({ 
+                message: 'Produto excluído com sucesso (dependências removidas)',
+                forcado: true
+            });
+            
+        } catch (error) {
+            console.error('Erro ao forçar exclusão do produto:', error);
             res.status(500).json({ error: error.message });
         }
     },
