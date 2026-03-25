@@ -1,4 +1,4 @@
-const sqlite3 = require('sqlite3').verbose();
+const Database = require('better-sqlite3');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
@@ -45,91 +45,89 @@ if (dbExists) {
     console.log('🆕 Criando novo banco de dados');
 }
 
-const db = new sqlite3.Database(dbPath);
+// Criar conexão com better-sqlite3
+const db = new Database(dbPath);
+
+// Configurar pragmas para melhor performance
+db.pragma('journal_mode = WAL'); // Write-Ahead Logging para melhor concorrência
+db.pragma('foreign_keys = ON'); // Habilitar chaves estrangeiras
 
 // ============================================
 // FUNÇÃO PARA VERIFICAR SE TABELA EXISTE
 // ============================================
 function tableExists(tableName) {
-    return new Promise((resolve, reject) => {
-        db.get(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, [tableName], (err, row) => {
-            if (err) reject(err);
-            else resolve(!!row);
-        });
-    });
+    try {
+        const row = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(tableName);
+        return !!row;
+    } catch (err) {
+        console.error(`Erro ao verificar tabela ${tableName}:`, err);
+        return false;
+    }
 }
 
 // ============================================
 // FUNÇÃO PARA CORRIGIR A TABELA VENDAS
 // ============================================
 function migrarTabelaVendas() {
-    return new Promise((resolve, reject) => {
+    try {
         // Verificar colunas da tabela vendas
-        db.all("PRAGMA table_info(vendas)", (err, columns) => {
-            if (err) {
-                console.error('Erro ao verificar colunas:', err);
-                reject(err);
-                return;
-            }
-
-            console.log('📊 Verificando estrutura da tabela vendas...');
+        const columns = db.prepare("PRAGMA table_info(vendas)").all();
+        
+        console.log('📊 Verificando estrutura da tabela vendas...');
+        
+        const columnNames = columns.map(col => col.name);
+        console.log('📋 Colunas existentes:', columnNames.join(', '));
+        
+        // Verificar se a coluna forma_pagamento existe
+        if (!columnNames.includes('forma_pagamento')) {
+            console.log('➕ Adicionando coluna forma_pagamento...');
             
-            const columnNames = columns.map(col => col.name);
-            console.log('📋 Colunas existentes:', columnNames.join(', '));
-            
-            // Verificar se a coluna forma_pagamento existe
-            if (!columnNames.includes('forma_pagamento')) {
-                console.log('➕ Adicionando coluna forma_pagamento...');
+            try {
+                db.exec('ALTER TABLE vendas ADD COLUMN forma_pagamento TEXT');
+                console.log('✅ Coluna forma_pagamento adicionada com sucesso!');
                 
-                db.run('ALTER TABLE vendas ADD COLUMN forma_pagamento TEXT', (err) => {
-                    if (err) {
-                        console.error('❌ Erro ao adicionar coluna:', err);
-                        reject(err);
-                    } else {
-                        console.log('✅ Coluna forma_pagamento adicionada com sucesso!');
-                        
-                        // Atualizar registros existentes copiando da coluna antiga
-                        if (columnNames.includes('forma_pagamento_text')) {
-                            db.run(`
-                                UPDATE vendas 
-                                SET forma_pagamento = forma_pagamento_text 
-                                WHERE forma_pagamento_text IS NOT NULL
-                            `, function(err) {
-                                if (err) {
-                                    console.error('❌ Erro ao copiar dados:', err);
-                                } else {
-                                    console.log(`📝 Dados copiados da coluna forma_pagamento_text`);
-                                }
-                                resolve();
-                            });
-                        } else {
-                            // Se não houver dados antigos, definir padrão
-                            db.run(`
-                                UPDATE vendas 
-                                SET forma_pagamento = 'Dinheiro' 
-                                WHERE forma_pagamento IS NULL
-                            `);
-                            resolve();
-                        }
-                    }
-                });
-            } else {
-                console.log('✅ Coluna forma_pagamento já existe');
-                resolve();
+                // Atualizar registros existentes copiando da coluna antiga
+                if (columnNames.includes('forma_pagamento_text')) {
+                    const result = db.prepare(`
+                        UPDATE vendas 
+                        SET forma_pagamento = forma_pagamento_text 
+                        WHERE forma_pagamento_text IS NOT NULL
+                    `).run();
+                    
+                    console.log(`📝 Dados copiados da coluna forma_pagamento_text: ${result.changes} registros atualizados`);
+                } else {
+                    // Se não houver dados antigos, definir padrão
+                    db.prepare(`
+                        UPDATE vendas 
+                        SET forma_pagamento = 'Dinheiro' 
+                        WHERE forma_pagamento IS NULL
+                    `).run();
+                    console.log('📝 Valor padrão definido para forma_pagamento');
+                }
+            } catch (err) {
+                console.error('❌ Erro ao adicionar coluna:', err);
+                throw err;
             }
-        });
-    });
+        } else {
+            console.log('✅ Coluna forma_pagamento já existe');
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('❌ Erro na migração:', error);
+        throw error;
+    }
 }
 
 // ============================================
 // INICIALIZAÇÃO DO BANCO DE DADOS
 // ============================================
 function initializeDatabase() {
-    db.serialize(() => {
+    try {
         // ===== TABELAS PRINCIPAIS =====
         
         // Criar tabela de categorias
-        db.run(`CREATE TABLE IF NOT EXISTS categorias (
+        db.exec(`CREATE TABLE IF NOT EXISTS categorias (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT UNIQUE NOT NULL,
             tipo TEXT NOT NULL,
@@ -138,7 +136,7 @@ function initializeDatabase() {
         )`);
 
         // Criar tabela de tipos
-        db.run(`CREATE TABLE IF NOT EXISTS tipos (
+        db.exec(`CREATE TABLE IF NOT EXISTS tipos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
             categoria_id INTEGER,
@@ -148,7 +146,7 @@ function initializeDatabase() {
         )`);
 
         // Criar tabela de usuários
-        db.run(`CREATE TABLE IF NOT EXISTS usuarios (
+        db.exec(`CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
@@ -160,7 +158,7 @@ function initializeDatabase() {
         )`);
 
         // Criar tabela de produtos
-        db.run(`CREATE TABLE IF NOT EXISTS produtos (
+        db.exec(`CREATE TABLE IF NOT EXISTS produtos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
             categoria_id INTEGER,
@@ -177,7 +175,7 @@ function initializeDatabase() {
         )`);
 
         // Criar tabela de doses
-        db.run(`CREATE TABLE IF NOT EXISTS doses (
+        db.exec(`CREATE TABLE IF NOT EXISTS doses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             produto_id INTEGER,
             nome TEXT NOT NULL,
@@ -191,7 +189,7 @@ function initializeDatabase() {
         )`);
 
         // Criar tabela de combos
-        db.run(`CREATE TABLE IF NOT EXISTS combos (
+        db.exec(`CREATE TABLE IF NOT EXISTS combos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
             descricao TEXT,
@@ -202,7 +200,7 @@ function initializeDatabase() {
         )`);
 
         // Criar tabela de itens_combo
-        db.run(`CREATE TABLE IF NOT EXISTS itens_combo (
+        db.exec(`CREATE TABLE IF NOT EXISTS itens_combo (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             combo_id INTEGER,
             produto_id INTEGER,
@@ -216,7 +214,7 @@ function initializeDatabase() {
         // ===== TABELAS DE PAGAMENTO =====
         
         // Criar tabela de formas_pagamento
-        db.run(`CREATE TABLE IF NOT EXISTS formas_pagamento (
+        db.exec(`CREATE TABLE IF NOT EXISTS formas_pagamento (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT UNIQUE NOT NULL,
             tipo TEXT DEFAULT 'normal',
@@ -226,7 +224,7 @@ function initializeDatabase() {
         // ===== TABELAS DE GASTOS =====
         
         // Criar tabela de categorias_gastos
-        db.run(`CREATE TABLE IF NOT EXISTS categorias_gastos (
+        db.exec(`CREATE TABLE IF NOT EXISTS categorias_gastos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT UNIQUE NOT NULL,
             descricao TEXT,
@@ -235,7 +233,7 @@ function initializeDatabase() {
         )`);
 
         // Criar tabela de gastos
-        db.run(`CREATE TABLE IF NOT EXISTS gastos (
+        db.exec(`CREATE TABLE IF NOT EXISTS gastos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             descricao TEXT NOT NULL,
             valor DECIMAL(10,2) NOT NULL,
@@ -251,7 +249,7 @@ function initializeDatabase() {
         )`);
 
         // Criar tabela de resumo_mensal
-        db.run(`CREATE TABLE IF NOT EXISTS resumo_mensal (
+        db.exec(`CREATE TABLE IF NOT EXISTS resumo_mensal (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ano INTEGER NOT NULL,
             mes INTEGER NOT NULL,
@@ -267,7 +265,7 @@ function initializeDatabase() {
         // ===== TABELAS DE ESTOQUE =====
         
         // Criar tabela de movimentacoes_estoque
-        db.run(`CREATE TABLE IF NOT EXISTS movimentacoes_estoque (
+        db.exec(`CREATE TABLE IF NOT EXISTS movimentacoes_estoque (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             produto_id INTEGER,
             dose_id INTEGER,
@@ -284,7 +282,7 @@ function initializeDatabase() {
         // ===== TABELAS DE VENDAS =====
         
         // Criar tabela de vendas
-        db.run(`CREATE TABLE IF NOT EXISTS vendas (
+        db.exec(`CREATE TABLE IF NOT EXISTS vendas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             data_venda DATETIME DEFAULT CURRENT_TIMESTAMP,
             total DECIMAL(10,2) NOT NULL,
@@ -301,7 +299,7 @@ function initializeDatabase() {
         )`);
 
         // Criar tabela de itens_venda
-        db.run(`CREATE TABLE IF NOT EXISTS itens_venda (
+        db.exec(`CREATE TABLE IF NOT EXISTS itens_venda (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             venda_id INTEGER,
             produto_id INTEGER,
@@ -316,8 +314,8 @@ function initializeDatabase() {
             FOREIGN KEY (combo_id) REFERENCES combos(id)
         )`);
 
-        // ===== TABELA DE CAIXA (ADICIONADA) =====
-        db.run(`CREATE TABLE IF NOT EXISTS caixa (
+        // ===== TABELA DE CAIXA =====
+        db.exec(`CREATE TABLE IF NOT EXISTS caixa (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             data_abertura DATETIME DEFAULT CURRENT_TIMESTAMP,
             data_fechamento DATETIME,
@@ -334,7 +332,7 @@ function initializeDatabase() {
         // ===== TABELAS DE CONFIGURAÇÃO =====
         
         // Criar tabela de configurações
-        db.run(`CREATE TABLE IF NOT EXISTS configuracoes (
+        db.exec(`CREATE TABLE IF NOT EXISTS configuracoes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             chave TEXT UNIQUE NOT NULL,
             valor TEXT,
@@ -343,128 +341,151 @@ function initializeDatabase() {
         )`);
 
         console.log('✅ Estrutura do banco de dados verificada');
-    });
+        return true;
+    } catch (error) {
+        console.error('❌ Erro ao inicializar banco de dados:', error);
+        throw error;
+    }
 }
 
 // ============================================
 // INSERIR DADOS PADRÃO (APENAS SE NECESSÁRIO)
 // ============================================
-async function inserirDadosPadrao() {
-    // Inserir formas de pagamento padrão se não existirem
-    db.run(`INSERT OR IGNORE INTO formas_pagamento (nome, tipo) VALUES 
-        ('Dinheiro', 'dinheiro'),
-        ('Débito', 'debito'),
-        ('Crédito', 'credito'),
-        ('Pix', 'pix')`);
+function inserirDadosPadrao() {
+    try {
+        // Inserir formas de pagamento padrão se não existirem
+        const insertFormaPagamento = db.prepare(`INSERT OR IGNORE INTO formas_pagamento (nome, tipo) VALUES (?, ?)`);
+        const formasPagamento = [
+            ['Dinheiro', 'dinheiro'],
+            ['Débito', 'debito'],
+            ['Crédito', 'credito'],
+            ['Pix', 'pix']
+        ];
+        
+        for (const [nome, tipo] of formasPagamento) {
+            insertFormaPagamento.run(nome, tipo);
+        }
 
-    // Inserir categorias de gastos padrão se não existirem
-    db.run(`INSERT OR IGNORE INTO categorias_gastos (nome, descricao, cor) VALUES 
-        ('Salários', 'Pagamento de funcionários', '#b91c3c'),
-        ('Aluguel', 'Aluguel do estabelecimento', '#c4a747'),
-        ('Água', 'Conta de água', '#2196f3'),
-        ('Luz', 'Conta de energia', '#ff9800'),
-        ('Internet', 'Internet e telefone', '#4caf50'),
-        ('Impostos', 'Impostos e taxas', '#f44336'),
-        ('Manutenção', 'Manutenção do espaço', '#9c27b0'),
-        ('Marketing', 'Publicidade e divulgação', '#e91e63'),
-        ('Fornecedores', 'Pagamento a fornecedores', '#3f51b5'),
-        ('Compras', 'Compra de mercadorias', '#00acc1'),
-        ('Equipamentos', 'Compra de equipamentos', '#7b1fa2'),
-        ('Outros', 'Outros gastos', '#607d8b')`);
+        // Inserir categorias de gastos padrão se não existirem
+        const insertCategoriaGasto = db.prepare(`INSERT OR IGNORE INTO categorias_gastos (nome, descricao, cor) VALUES (?, ?, ?)`);
+        const categoriasGastos = [
+            ['Salários', 'Pagamento de funcionários', '#b91c3c'],
+            ['Aluguel', 'Aluguel do estabelecimento', '#c4a747'],
+            ['Água', 'Conta de água', '#2196f3'],
+            ['Luz', 'Conta de energia', '#ff9800'],
+            ['Internet', 'Internet e telefone', '#4caf50'],
+            ['Impostos', 'Impostos e taxas', '#f44336'],
+            ['Manutenção', 'Manutenção do espaço', '#9c27b0'],
+            ['Marketing', 'Publicidade e divulgação', '#e91e63'],
+            ['Fornecedores', 'Pagamento a fornecedores', '#3f51b5'],
+            ['Compras', 'Compra de mercadorias', '#00acc1'],
+            ['Equipamentos', 'Compra de equipamentos', '#7b1fa2'],
+            ['Outros', 'Outros gastos', '#607d8b']
+        ];
+        
+        for (const [nome, descricao, cor] of categoriasGastos) {
+            insertCategoriaGasto.run(nome, descricao, cor);
+        }
 
-    // Inserir categorias padrão
-    db.run(`INSERT OR IGNORE INTO categorias (nome, tipo, cor) VALUES 
-        ('Bebidas', 'bebida', '#c4a747'),
-        ('Comes', 'come', '#b91c3c'),
-        ('Doses', 'dose', '#c4a747'),
-        ('Combos', 'combo', '#b91c3c'),
-        ('Outros', 'outro', '#666666')`);
+        // Inserir categorias padrão
+        const insertCategoria = db.prepare(`INSERT OR IGNORE INTO categorias (nome, tipo, cor) VALUES (?, ?, ?)`);
+        const categorias = [
+            ['Bebidas', 'bebida', '#c4a747'],
+            ['Comes', 'come', '#b91c3c'],
+            ['Doses', 'dose', '#c4a747'],
+            ['Combos', 'combo', '#b91c3c'],
+            ['Outros', 'outro', '#666666']
+        ];
+        
+        for (const [nome, tipo, cor] of categorias) {
+            insertCategoria.run(nome, tipo, cor);
+        }
 
-    // Inserir tipos padrão
-    db.run(`INSERT OR IGNORE INTO tipos (nome, categoria_id) VALUES 
-        ('Cerveja', (SELECT id FROM categorias WHERE nome = 'Bebidas')),
-        ('Whisky', (SELECT id FROM categorias WHERE nome = 'Bebidas')),
-        ('Vodka', (SELECT id FROM categorias WHERE nome = 'Bebidas')),
-        ('Refrigerante', (SELECT id FROM categorias WHERE nome = 'Bebidas')),
-        ('Suco', (SELECT id FROM categorias WHERE nome = 'Bebidas')),
-        ('Dose Simples', (SELECT id FROM categorias WHERE nome = 'Doses')),
-        ('Dose Dupla', (SELECT id FROM categorias WHERE nome = 'Doses')),
-        ('Combo PodPá', (SELECT id FROM categorias WHERE nome = 'Combos')),
-        ('Combo Especial', (SELECT id FROM categorias WHERE nome = 'Combos')),
-        ('Salgado', (SELECT id FROM categorias WHERE nome = 'Comes')),
-        ('Doce', (SELECT id FROM categorias WHERE nome = 'Comes')),
-        ('Porção', (SELECT id FROM categorias WHERE nome = 'Comes'))`);
+        // Inserir tipos padrão
+        const insertTipo = db.prepare(`INSERT OR IGNORE INTO tipos (nome, categoria_id) VALUES (?, 
+            (SELECT id FROM categorias WHERE nome = ?))`);
+        const tipos = [
+            ['Cerveja', 'Bebidas'],
+            ['Whisky', 'Bebidas'],
+            ['Vodka', 'Bebidas'],
+            ['Refrigerante', 'Bebidas'],
+            ['Suco', 'Bebidas'],
+            ['Dose Simples', 'Doses'],
+            ['Dose Dupla', 'Doses'],
+            ['Combo PodPá', 'Combos'],
+            ['Combo Especial', 'Combos'],
+            ['Salgado', 'Comes'],
+            ['Doce', 'Comes'],
+            ['Porção', 'Comes']
+        ];
+        
+        for (const [nome, categoriaNome] of tipos) {
+            insertTipo.run(nome, categoriaNome);
+        }
 
-    // Inserir configurações padrão
-    db.run(`INSERT OR IGNORE INTO configuracoes (chave, valor, tipo, descricao) VALUES 
-        ('estoque_minimo', '5', 'number', 'Quantidade mínima para alerta de estoque'),
-        ('tema', 'dark', 'text', 'Tema do sistema'),
-        ('empresa_nome', 'PodPá', 'text', 'Nome da empresa'),
-        ('ultimo_resumo_mensal', '', 'text', 'Data do último resumo mensal')`);
+        // Inserir configurações padrão
+        const insertConfig = db.prepare(`INSERT OR IGNORE INTO configuracoes (chave, valor, tipo, descricao) VALUES (?, ?, ?, ?)`);
+        const configuracoes = [
+            ['estoque_minimo', '5', 'number', 'Quantidade mínima para alerta de estoque'],
+            ['tema', 'dark', 'text', 'Tema do sistema'],
+            ['empresa_nome', 'PodPá', 'text', 'Nome da empresa'],
+            ['ultimo_resumo_mensal', '', 'text', 'Data do último resumo mensal']
+        ];
+        
+        for (const [chave, valor, tipo, descricao] of configuracoes) {
+            insertConfig.run(chave, valor, tipo, descricao);
+        }
 
-    console.log('📝 Dados padrão inseridos (apenas se não existiam)');
+        console.log('📝 Dados padrão inseridos (apenas se não existiam)');
+        return true;
+    } catch (error) {
+        console.error('❌ Erro ao inserir dados padrão:', error);
+        throw error;
+    }
 }
 
 // ============================================
 // CRIAÇÃO DE USUÁRIOS PADRÃO
 // ============================================
 async function criarUsuariosPadrao() {
-    const senhaAdmin = await bcrypt.hash('podpa201121', 10);
-    const senhaFuncionario = await bcrypt.hash('func123', 10);
-    
-    // Verificar se já existem usuários
-    db.get('SELECT COUNT(*) as total FROM usuarios', [], (err, result) => {
-        if (err) {
-            console.error('Erro ao verificar usuários:', err);
-            return;
-        }
+    try {
+        const senhaAdmin = await bcrypt.hash('podpa201121', 10);
+        const senhaFuncionario = await bcrypt.hash('func123', 10);
+        
+        // Verificar se já existem usuários
+        const result = db.prepare('SELECT COUNT(*) as total FROM usuarios').get();
         
         // Se não houver usuários, criar os padrão
         if (result.total === 0) {
             console.log('👤 Criando usuários padrão...');
             
             // Criar admin
-            db.run(
-                'INSERT INTO usuarios (username, password, nome, email, role) VALUES (?, ?, ?, ?, ?)',
-                ['admin', senhaAdmin, 'Administrador', 'admin@podpa.com', 'admin'],
-                function(err) {
-                    if (err) {
-                        console.error('Erro ao criar admin:', err);
-                    } else {
-                        console.log('✅ Admin criado: admin / podpa201121');
-                    }
-                }
-            );
+            const insertAdmin = db.prepare('INSERT INTO usuarios (username, password, nome, email, role) VALUES (?, ?, ?, ?, ?)');
+            insertAdmin.run('admin', senhaAdmin, 'Administrador', 'admin@podpa.com', 'admin');
+            console.log('✅ Admin criado: admin / podpa201121');
             
             // Criar funcionário
-            db.run(
-                'INSERT INTO usuarios (username, password, nome, email, role) VALUES (?, ?, ?, ?, ?)',
-                ['funcionario', senhaFuncionario, 'Funcionário', 'func@podpa.com', 'funcionario'],
-                function(err) {
-                    if (err) {
-                        console.error('Erro ao criar funcionário:', err);
-                    } else {
-                        console.log('✅ Funcionário criado: funcionario / func123');
-                    }
-                }
-            );
+            const insertFunc = db.prepare('INSERT INTO usuarios (username, password, nome, email, role) VALUES (?, ?, ?, ?, ?)');
+            insertFunc.run('funcionario', senhaFuncionario, 'Funcionário', 'func@podpa.com', 'funcionario');
+            console.log('✅ Funcionário criado: funcionario / func123');
         } else {
             console.log(`👥 ${result.total} usuários já existentes - mantidos`);
             
             // Atualizar senha do admin para garantir
-            db.run(
-                'UPDATE usuarios SET password = ? WHERE username = ?',
-                [senhaAdmin, 'admin'],
-                function(err) {
-                    if (err) {
-                        console.error('Erro ao atualizar senha do admin:', err);
-                    } else {
-                        console.log('🔑 Senha do admin verificada');
-                    }
-                }
-            );
+            const updateAdmin = db.prepare('UPDATE usuarios SET password = ? WHERE username = ?');
+            const adminUpdate = updateAdmin.run(senhaAdmin, 'admin');
+            
+            if (adminUpdate.changes > 0) {
+                console.log('🔑 Senha do admin atualizada');
+            } else {
+                console.log('🔑 Senha do admin já está correta');
+            }
         }
-    });
+        return true;
+    } catch (error) {
+        console.error('❌ Erro ao criar/atualizar usuários:', error);
+        throw error;
+    }
 }
 
 // ============================================
@@ -482,12 +503,12 @@ function criarBackup() {
         // Verificar se o banco existe
         if (!fs.existsSync(dbPath)) {
             console.log('❌ Banco de dados não encontrado para backup');
-            return;
+            return null;
         }
         
         // Criar nome do arquivo de backup com data
         const date = new Date();
-        const backupName = `backup_${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')}.sqlite`;
+        const backupName = `backup_${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')}_${date.getHours().toString().padStart(2,'0')}${date.getMinutes().toString().padStart(2,'0')}.sqlite`;
         const backupPath = path.join(backupDir, backupName);
         
         // Copiar arquivo
@@ -510,6 +531,7 @@ function criarBackup() {
         return backupPath;
     } catch (error) {
         console.error('❌ Erro ao criar backup:', error);
+        return null;
     }
 }
 
@@ -519,28 +541,31 @@ function criarBackup() {
 console.log('\n🚀 Inicializando banco de dados...');
 console.log('=================================');
 
-// Inicializar estrutura
-initializeDatabase();
-
-// Executar migrações após criar as tabelas
-setTimeout(() => {
-    migrarTabelaVendas().catch(err => {
-        console.error('❌ Erro na migração:', err);
+try {
+    // Inicializar estrutura
+    initializeDatabase();
+    
+    // Executar migrações após criar as tabelas
+    migrarTabelaVendas();
+    
+    // Inserir dados padrão
+    inserirDadosPadrao();
+    
+    // Criar usuários (async)
+    criarUsuariosPadrao().catch(err => {
+        console.error('❌ Erro ao criar usuários padrão:', err);
     });
-}, 500);
-
-// Inserir dados padrão
-inserirDadosPadrao();
-
-// Criar usuários
-criarUsuariosPadrao();
-
-// Criar backup inicial (opcional)
-if (dbExists) {
-    criarBackup();
+    
+    // Criar backup inicial (opcional)
+    if (dbExists) {
+        criarBackup();
+    }
+    
+    console.log('=================================\n');
+} catch (error) {
+    console.error('❌ Erro fatal na inicialização do banco de dados:', error);
+    process.exit(1);
 }
-
-console.log('=================================\n');
 
 // ============================================
 // EXPORTAÇÃO
@@ -550,5 +575,7 @@ module.exports = {
     initializeDatabase, 
     criarUsuariosPadrao,
     criarBackup,
-    tableExists 
-};
+    tableExists,
+    migrarTabelaVendas,
+    inserirDadosPadrao
+};  

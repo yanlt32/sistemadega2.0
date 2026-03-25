@@ -13,45 +13,41 @@ const authController = {
                 return res.status(400).json({ error: 'Usuário e senha são obrigatórios' });
             }
 
-            db.get('SELECT * FROM usuarios WHERE username = ?', [username], async (err, user) => {
-                if (err) {
-                    console.error('Erro no banco:', err);
-                    return res.status(500).json({ error: 'Erro no servidor' });
-                }
-                
-                if (!user) {
-                    return res.status(401).json({ error: 'Usuário ou senha inválidos' });
-                }
+            // better-sqlite3 uses synchronous methods
+            const user = db.prepare('SELECT * FROM usuarios WHERE username = ?').get(username);
+            
+            if (!user) {
+                return res.status(401).json({ error: 'Usuário ou senha inválidos' });
+            }
 
-                const senhaValida = await bcrypt.compare(password, user.password);
-                
-                if (!senhaValida) {
-                    return res.status(401).json({ error: 'Usuário ou senha inválidos' });
-                }
+            const senhaValida = await bcrypt.compare(password, user.password);
+            
+            if (!senhaValida) {
+                return res.status(401).json({ error: 'Usuário ou senha inválidos' });
+            }
 
-                // Atualizar último login
-                db.run('UPDATE usuarios SET last_login = CURRENT_TIMESTAMP WHERE id = ?', [user.id]);
+            // Atualizar último login - synchronous execution
+            db.prepare('UPDATE usuarios SET last_login = CURRENT_TIMESTAMP WHERE id = ?').run(user.id);
 
-                const token = jwt.sign(
-                    { 
-                        id: user.id, 
-                        username: user.username, 
-                        nome: user.nome,
-                        role: user.role 
-                    },
-                    SECRET_KEY,
-                    { expiresIn: '8h' }
-                );
+            const token = jwt.sign(
+                { 
+                    id: user.id, 
+                    username: user.username, 
+                    nome: user.nome,
+                    role: user.role 
+                },
+                SECRET_KEY,
+                { expiresIn: '8h' }
+            );
 
-                res.json({ 
-                    token, 
-                    user: { 
-                        id: user.id, 
-                        username: user.username, 
-                        nome: user.nome,
-                        role: user.role
-                    } 
-                });
+            res.json({ 
+                token, 
+                user: { 
+                    id: user.id, 
+                    username: user.username, 
+                    nome: user.nome,
+                    role: user.role
+                } 
             });
         } catch (error) {
             console.error('Erro no login:', error);
