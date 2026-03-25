@@ -26,46 +26,36 @@ const exportacaoController = {
             const mesFormatado = mesAtual.toString().padStart(2, '0');
 
             // Buscar vendas do período
-            const vendas = await new Promise((resolve, reject) => {
-                db.all(`
-                    SELECT 
-                        v.id,
-                        v.data_venda,
-                        v.total,
-                        v.lucro,
-                        v.forma_pagamento,
-                        u.nome as vendedor
-                    FROM vendas v
-                    LEFT JOIN usuarios u ON v.usuario_id = u.id
-                    WHERE strftime('%m', v.data_venda) = ? 
-                    AND strftime('%Y', v.data_venda) = ?
-                    AND v.status = 'concluida'
-                    ORDER BY v.data_venda DESC
-                `, [mesFormatado, anoAtual], (err, result) => {
-                    if (err) reject(err);
-                    else resolve(result || []);
-                });
-            });
+            const vendas = db.prepare(`
+                SELECT 
+                    v.id,
+                    v.data_venda,
+                    v.total,
+                    v.lucro,
+                    v.forma_pagamento,
+                    u.nome as vendedor
+                FROM vendas v
+                LEFT JOIN usuarios u ON v.usuario_id = u.id
+                WHERE strftime('%m', v.data_venda) = ? 
+                AND strftime('%Y', v.data_venda) = ?
+                AND v.status = 'concluida'
+                ORDER BY v.data_venda DESC
+            `).all(mesFormatado, anoAtual);
 
             // Buscar gastos do período
-            const gastos = await new Promise((resolve, reject) => {
-                db.all(`
-                    SELECT 
-                        g.id,
-                        g.descricao,
-                        g.valor,
-                        g.data_gasto,
-                        c.nome as categoria
-                    FROM gastos g
-                    LEFT JOIN categorias_gastos c ON g.categoria_id = c.id
-                    WHERE strftime('%m', g.data_gasto) = ? 
-                    AND strftime('%Y', g.data_gasto) = ?
-                    ORDER BY g.data_gasto DESC
-                `, [mesFormatado, anoAtual], (err, result) => {
-                    if (err) reject(err);
-                    else resolve(result || []);
-                });
-            });
+            const gastos = db.prepare(`
+                SELECT 
+                    g.id,
+                    g.descricao,
+                    g.valor,
+                    g.data_gasto,
+                    c.nome as categoria
+                FROM gastos g
+                LEFT JOIN categorias_gastos c ON g.categoria_id = c.id
+                WHERE strftime('%m', g.data_gasto) = ? 
+                AND strftime('%Y', g.data_gasto) = ?
+                ORDER BY g.data_gasto DESC
+            `).all(mesFormatado, anoAtual);
 
             const workbook = new ExcelJS.Workbook();
             
@@ -188,62 +178,57 @@ const exportacaoController = {
 
             query += ' GROUP BY v.id ORDER BY v.data_venda DESC';
 
-            db.all(query, params, async (err, vendas) => {
-                if (err) {
-                    console.error('Erro ao buscar vendas:', err);
-                    return res.status(500).json({ error: err.message });
-                }
+            const vendas = db.prepare(query).all(...params);
 
-                const workbook = new ExcelJS.Workbook();
-                const worksheet = workbook.addWorksheet('Vendas');
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Vendas');
 
-                worksheet.columns = [
-                    { header: 'ID', key: 'id', width: 10 },
-                    { header: 'Data', key: 'data', width: 20 },
-                    { header: 'Vendedor', key: 'vendedor', width: 20 },
-                    { header: 'Total (R$)', key: 'total', width: 15 },
-                    { header: 'Lucro (R$)', key: 'lucro', width: 15 },
-                    { header: 'Forma Pagamento', key: 'forma_pagamento', width: 15 },
-                    { header: 'Status', key: 'status', width: 15 },
-                    { header: 'Qtd Itens', key: 'itens', width: 10 }
-                ];
+            worksheet.columns = [
+                { header: 'ID', key: 'id', width: 10 },
+                { header: 'Data', key: 'data', width: 20 },
+                { header: 'Vendedor', key: 'vendedor', width: 20 },
+                { header: 'Total (R$)', key: 'total', width: 15 },
+                { header: 'Lucro (R$)', key: 'lucro', width: 15 },
+                { header: 'Forma Pagamento', key: 'forma_pagamento', width: 15 },
+                { header: 'Status', key: 'status', width: 15 },
+                { header: 'Qtd Itens', key: 'itens', width: 10 }
+            ];
 
-                vendas.forEach(v => {
-                    worksheet.addRow({
-                        id: v.id,
-                        data: new Date(v.data_venda).toLocaleString('pt-BR'),
-                        vendedor: v.vendedor || 'Sistema',
-                        total: v.total,
-                        lucro: v.lucro,
-                        forma_pagamento: v.forma_pagamento,
-                        status: v.status,
-                        itens: v.quantidade_itens
-                    });
-                });
-
-                const totalVendas = vendas.reduce((acc, v) => acc + v.total, 0);
-                const totalLucro = vendas.reduce((acc, v) => acc + v.lucro, 0);
-                
-                worksheet.addRow({});
+            vendas.forEach(v => {
                 worksheet.addRow({
-                    data: 'TOTAIS:',
-                    total: totalVendas,
-                    lucro: totalLucro
+                    id: v.id,
+                    data: new Date(v.data_venda).toLocaleString('pt-BR'),
+                    vendedor: v.vendedor || 'Sistema',
+                    total: v.total,
+                    lucro: v.lucro,
+                    forma_pagamento: v.forma_pagamento,
+                    status: v.status,
+                    itens: v.quantidade_itens
                 });
-
-                worksheet.getRow(1).font = { bold: true };
-                worksheet.getRow(1).fill = {
-                    type: 'pattern',
-                    pattern: 'solid',
-                    fgColor: { argb: 'FFc4a747' }
-                };
-
-                res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-                res.setHeader('Content-Disposition', `attachment; filename=vendas_${new Date().toISOString().split('T')[0]}.xlsx`);
-
-                await workbook.xlsx.write(res);
-                res.end();
             });
+
+            const totalVendas = vendas.reduce((acc, v) => acc + v.total, 0);
+            const totalLucro = vendas.reduce((acc, v) => acc + v.lucro, 0);
+            
+            worksheet.addRow({});
+            worksheet.addRow({
+                data: 'TOTAIS:',
+                total: totalVendas,
+                lucro: totalLucro
+            });
+
+            worksheet.getRow(1).font = { bold: true };
+            worksheet.getRow(1).fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FFc4a747' }
+            };
+
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            res.setHeader('Content-Disposition', `attachment; filename=vendas_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+            await workbook.xlsx.write(res);
+            res.end();
         } catch (error) {
             console.error('Erro ao exportar vendas:', error);
             res.status(500).json({ error: error.message });
@@ -265,7 +250,7 @@ const exportacaoController = {
                 return res.status(401).json({ error: 'Token inválido' });
             }
 
-            db.all(`
+            const produtos = db.prepare(`
                 SELECT 
                     p.*,
                     c.nome as categoria_nome,
@@ -274,52 +259,47 @@ const exportacaoController = {
                 LEFT JOIN categorias c ON p.categoria_id = c.id
                 LEFT JOIN tipos t ON p.tipo_id = t.id
                 ORDER BY p.nome
-            `, [], async (err, produtos) => {
-                if (err) {
-                    console.error('Erro ao buscar produtos:', err);
-                    return res.status(500).json({ error: err.message });
-                }
+            `).all();
 
-                const workbook = new ExcelJS.Workbook();
-                const worksheet = workbook.addWorksheet('Produtos');
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Produtos');
 
-                worksheet.columns = [
-                    { header: 'ID', key: 'id', width: 8 },
-                    { header: 'Nome', key: 'nome', width: 30 },
-                    { header: 'Categoria', key: 'categoria', width: 20 },
-                    { header: 'Tipo', key: 'tipo', width: 20 },
-                    { header: 'Preço Custo', key: 'preco_custo', width: 15 },
-                    { header: 'Preço Venda', key: 'preco_venda', width: 15 },
-                    { header: 'Estoque', key: 'quantidade', width: 10 },
-                    { header: 'Código Barras', key: 'codigo_barras', width: 20 }
-                ];
+            worksheet.columns = [
+                { header: 'ID', key: 'id', width: 8 },
+                { header: 'Nome', key: 'nome', width: 30 },
+                { header: 'Categoria', key: 'categoria', width: 20 },
+                { header: 'Tipo', key: 'tipo', width: 20 },
+                { header: 'Preço Custo', key: 'preco_custo', width: 15 },
+                { header: 'Preço Venda', key: 'preco_venda', width: 15 },
+                { header: 'Estoque', key: 'quantidade', width: 10 },
+                { header: 'Código Barras', key: 'codigo_barras', width: 20 }
+            ];
 
-                worksheet.getRow(1).font = { bold: true };
-                worksheet.getRow(1).fill = {
-                    type: 'pattern',
-                    pattern: 'solid',
-                    fgColor: { argb: 'FFc4a747' }
-                };
+            worksheet.getRow(1).font = { bold: true };
+            worksheet.getRow(1).fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FFc4a747' }
+            };
 
-                produtos.forEach(p => {
-                    worksheet.addRow({
-                        id: p.id,
-                        nome: p.nome,
-                        categoria: p.categoria_nome || '-',
-                        tipo: p.tipo_nome || '-',
-                        preco_custo: p.preco_custo,
-                        preco_venda: p.preco_venda,
-                        quantidade: p.quantidade,
-                        codigo_barras: p.codigo_barras || '-'
-                    });
+            produtos.forEach(p => {
+                worksheet.addRow({
+                    id: p.id,
+                    nome: p.nome,
+                    categoria: p.categoria_nome || '-',
+                    tipo: p.tipo_nome || '-',
+                    preco_custo: p.preco_custo,
+                    preco_venda: p.preco_venda,
+                    quantidade: p.quantidade,
+                    codigo_barras: p.codigo_barras || '-'
                 });
-
-                res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-                res.setHeader('Content-Disposition', `attachment; filename=produtos_${new Date().toISOString().split('T')[0]}.xlsx`);
-
-                await workbook.xlsx.write(res);
-                res.end();
             });
+
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            res.setHeader('Content-Disposition', `attachment; filename=produtos_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+            await workbook.xlsx.write(res);
+            res.end();
         } catch (error) {
             console.error('Erro ao exportar produtos:', error);
             res.status(500).json({ error: error.message });

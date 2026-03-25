@@ -1,63 +1,108 @@
-const TipoModel = require('../models/tipoModel');
+const { db } = require('../models/database');
 
-exports.listar = async (req, res) => {
-    try {
-        const tipos = await TipoModel.findAll();
-        res.json(tipos);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-};
-
-exports.porCategoria = async (req, res) => {
-    try {
-        const tipos = await TipoModel.findByCategoria(req.params.categoriaId);
-        res.json(tipos);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-};
-
-exports.criar = async (req, res) => {
-    try {
-        const { nome, categoria_id } = req.body;
-        
-        if (!nome || !categoria_id) {
-            return res.status(400).json({ error: 'Nome e categoria são obrigatórios' });
+const tipoController = {
+    // Listar todos os tipos
+    listar: (req, res) => {
+        try {
+            const tipos = db.prepare(`
+                SELECT t.*, c.nome as categoria_nome 
+                FROM tipos t
+                LEFT JOIN categorias c ON t.categoria_id = c.id
+                ORDER BY t.nome
+            `).all();
+            res.json(tipos);
+        } catch (error) {
+            console.error('Erro ao listar tipos:', error);
+            res.status(500).json({ error: error.message });
         }
+    },
 
-        const id = await TipoModel.create(nome, categoria_id);
-        res.json({ id, message: 'Tipo criado com sucesso' });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-};
-
-exports.atualizar = async (req, res) => {
-    try {
-        const { nome, categoria_id } = req.body;
-        const changes = await TipoModel.update(req.params.id, nome, categoria_id);
-        
-        if (changes === 0) {
-            return res.status(404).json({ error: 'Tipo não encontrado' });
+    // Buscar tipos por categoria
+    porCategoria: (req, res) => {
+        try {
+            const { categoriaId } = req.params;
+            const tipos = db.prepare(`
+                SELECT t.*, c.nome as categoria_nome 
+                FROM tipos t
+                LEFT JOIN categorias c ON t.categoria_id = c.id
+                WHERE t.categoria_id = ?
+                ORDER BY t.nome
+            `).all(categoriaId);
+            res.json(tipos);
+        } catch (error) {
+            console.error('Erro ao buscar tipos por categoria:', error);
+            res.status(500).json({ error: error.message });
         }
-        
-        res.json({ message: 'Tipo atualizado com sucesso' });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
+    },
+
+    // Criar novo tipo
+    criar: (req, res) => {
+        try {
+            const { nome, categoria_id } = req.body;
+            
+            if (!nome || !categoria_id) {
+                return res.status(400).json({ error: 'Nome e categoria são obrigatórios' });
+            }
+
+            const result = db.prepare(
+                'INSERT INTO tipos (nome, categoria_id) VALUES (?, ?)'
+            ).run(nome, categoria_id);
+            
+            res.json({ id: result.lastInsertRowid, message: 'Tipo criado com sucesso' });
+        } catch (error) {
+            console.error('Erro ao criar tipo:', error);
+            res.status(500).json({ error: error.message });
+        }
+    },
+
+    // Atualizar tipo
+    atualizar: (req, res) => {
+        try {
+            const { id } = req.params;
+            const { nome, categoria_id } = req.body;
+
+            const result = db.prepare(
+                'UPDATE tipos SET nome = ?, categoria_id = ? WHERE id = ?'
+            ).run(nome, categoria_id, id);
+            
+            if (result.changes === 0) {
+                return res.status(404).json({ error: 'Tipo não encontrado' });
+            }
+            
+            res.json({ message: 'Tipo atualizado com sucesso' });
+        } catch (error) {
+            console.error('Erro ao atualizar tipo:', error);
+            res.status(500).json({ error: error.message });
+        }
+    },
+
+    // Excluir tipo
+    excluir: (req, res) => {
+        try {
+            const { id } = req.params;
+
+            // Verificar se existem produtos usando este tipo
+            const result = db.prepare('SELECT COUNT(*) as count FROM produtos WHERE tipo_id = ?').get(id);
+
+            if (result.count > 0) {
+                return res.status(400).json({ 
+                    error: 'Não é possível excluir tipo com produtos vinculados',
+                    quantidade: result.count 
+                });
+            }
+
+            const deleteResult = db.prepare('DELETE FROM tipos WHERE id = ?').run(id);
+            
+            if (deleteResult.changes === 0) {
+                return res.status(404).json({ error: 'Tipo não encontrado' });
+            }
+            
+            res.json({ message: 'Tipo excluído com sucesso' });
+        } catch (error) {
+            console.error('Erro ao excluir tipo:', error);
+            res.status(500).json({ error: error.message });
+        }
     }
 };
 
-exports.excluir = async (req, res) => {
-    try {
-        const changes = await TipoModel.delete(req.params.id);
-        
-        if (changes === 0) {
-            return res.status(404).json({ error: 'Tipo não encontrado' });
-        }
-        
-        res.json({ message: 'Tipo excluído com sucesso' });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-};
+module.exports = tipoController;
