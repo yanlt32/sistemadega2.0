@@ -440,7 +440,7 @@ const produtoController = {
         try {
             const produtos = db.prepare(`
                 SELECT * FROM produtos 
-                WHERE quantité < 5 
+                WHERE quantidade < 5 
                 ORDER BY quantidade
             `).all();
             

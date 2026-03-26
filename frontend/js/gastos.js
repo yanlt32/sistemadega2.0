@@ -1,3 +1,6 @@
+// ============================================
+// MÓDULO DE GASTOS
+// ============================================
 const Gastos = {
     paginaAtual: 1,
     totalPaginas: 1,
@@ -8,6 +11,7 @@ const Gastos = {
     },
     categorias: [],
     formasPagamento: [],
+    gastoEditando: null,
     
     async init() {
         await Auth.checkAuth();
@@ -21,15 +25,24 @@ const Gastos = {
         await this.carregarFormasPagamento();
         this.setupEventListeners();
         await this.carregarGastos();
-        this.carregarResumoRapido();
+        await this.carregarResumoRapido();
     },
     
     setupEventListeners() {
-        document.getElementById('btnNovoGasto')?.addEventListener('click', () => this.abrirModal());
-        document.getElementById('btnResumoMensal')?.addEventListener('click', () => this.abrirModalResumo());
-        document.getElementById('btnExportarExcel')?.addEventListener('click', () => this.exportarExcel());
-        document.getElementById('btnFiltrar')?.addEventListener('click', () => this.aplicarFiltros());
-        document.getElementById('btnLimparFiltros')?.addEventListener('click', () => this.limparFiltros());
+        const btnNovo = document.getElementById('btnNovoGasto');
+        if (btnNovo) btnNovo.addEventListener('click', () => this.abrirModal());
+        
+        const btnResumo = document.getElementById('btnResumoMensal');
+        if (btnResumo) btnResumo.addEventListener('click', () => this.abrirModalResumo());
+        
+        const btnExportar = document.getElementById('btnExportarExcel');
+        if (btnExportar) btnExportar.addEventListener('click', () => this.exportarExcel());
+        
+        const btnFiltrar = document.getElementById('btnFiltrar');
+        if (btnFiltrar) btnFiltrar.addEventListener('click', () => this.aplicarFiltros());
+        
+        const btnLimpar = document.getElementById('btnLimparFiltros');
+        if (btnLimpar) btnLimpar.addEventListener('click', () => this.limparFiltros());
         
         const formGasto = document.getElementById('formGasto');
         if (formGasto) {
@@ -39,20 +52,26 @@ const Gastos = {
             });
         }
         
-        document.querySelector('#modalGasto .close')?.addEventListener('click', () => this.fecharModal());
+        const closeBtn = document.querySelector('#modalGasto .close');
+        if (closeBtn) closeBtn.addEventListener('click', () => this.fecharModal());
+        
+        const closeResumoBtn = document.querySelector('#modalResumo .close');
+        if (closeResumoBtn) closeResumoBtn.addEventListener('click', () => this.fecharModalResumo());
         
         // Fechar modal com clique fora
         window.addEventListener('click', (e) => {
-            const modal = document.getElementById('modalGasto');
-            if (e.target === modal) {
-                this.fecharModal();
-            }
+            const modalGasto = document.getElementById('modalGasto');
+            if (e.target === modalGasto) this.fecharModal();
             
             const modalResumo = document.getElementById('modalResumo');
-            if (e.target === modalResumo) {
-                this.fecharModalResumo();
-            }
+            if (e.target === modalResumo) this.fecharModalResumo();
         });
+        
+        // Atualizar resumo ao mudar mês/ano
+        const resumoMes = document.getElementById('resumoMes');
+        const resumoAno = document.getElementById('resumoAno');
+        if (resumoMes) resumoMes.addEventListener('change', () => this.carregarResumo());
+        if (resumoAno) resumoAno.addEventListener('change', () => this.carregarResumo());
     },
     
     async carregarCategorias() {
@@ -74,7 +93,7 @@ const Gastos = {
             }
         } catch (error) {
             console.error('Erro ao carregar categorias:', error);
-            Notificacao.mostrar('Erro ao carregar categorias', 'danger');
+            App.showNotification('Erro ao carregar categorias', 'danger');
         }
     },
     
@@ -115,9 +134,7 @@ const Gastos = {
             
         } catch (error) {
             console.error('Erro ao carregar gastos:', error);
-            if (window.Notificacao) {
-                Notificacao.mostrar('Erro ao carregar gastos', 'danger');
-            }
+            App.showNotification('Erro ao carregar gastos', 'danger');
         } finally {
             UI.hideLoading();
         }
@@ -201,8 +218,8 @@ const Gastos = {
         const anoInput = document.getElementById('filtroAno');
         const categoriaSelect = document.getElementById('filtroCategoria');
         
-        this.filtros.mes = mesSelect ? mesSelect.value : new Date().getMonth() + 1;
-        this.filtros.ano = anoInput ? anoInput.value : new Date().getFullYear();
+        this.filtros.mes = mesSelect ? parseInt(mesSelect.value) : new Date().getMonth() + 1;
+        this.filtros.ano = anoInput ? parseInt(anoInput.value) : new Date().getFullYear();
         this.filtros.categoria = categoriaSelect ? categoriaSelect.value : '';
         
         this.paginaAtual = 1;
@@ -232,7 +249,7 @@ const Gastos = {
     
     async carregarResumoRapido() {
         try {
-            const resumo = await API.resumoMensal({
+            const resumo = await API.resumoMensalGastos({
                 mes: this.filtros.mes,
                 ano: this.filtros.ano
             });
@@ -317,14 +334,10 @@ const Gastos = {
             
             if (this.gastoEditando) {
                 await API.atualizarGasto(this.gastoEditando.id, gasto);
-                if (window.Notificacao) {
-                    Notificacao.mostrar('Gasto atualizado!', 'success');
-                }
+                App.showNotification('Gasto atualizado!', 'success');
             } else {
                 await API.criarGasto(gasto);
-                if (window.Notificacao) {
-                    Notificacao.mostrar('Gasto registrado!', 'success');
-                }
+                App.showNotification('Gasto registrado!', 'success');
             }
             
             this.fecharModal();
@@ -333,11 +346,7 @@ const Gastos = {
             
         } catch (error) {
             console.error('Erro ao salvar:', error);
-            if (window.Notificacao) {
-                Notificacao.mostrar(error.message, 'danger');
-            } else {
-                alert(error.message);
-            }
+            App.showNotification(error.message, 'danger');
         } finally {
             UI.hideLoading();
         }
@@ -347,21 +356,17 @@ const Gastos = {
         try {
             UI.showLoading();
             
-            // Tentar buscar o gasto específico
+            // Buscar o gasto específico
             let gasto = null;
             
             if (API.buscarGasto) {
                 try {
                     gasto = await API.buscarGasto(id);
                 } catch (e) {
-                    console.log('Erro ao buscar gasto específico, tentando listar...');
+                    // Se falhar, buscar na lista
+                    const data = await API.listarGastos({ id });
+                    gasto = data.gastos?.find(g => g.id === id);
                 }
-            }
-            
-            // Se não conseguiu buscar específico, buscar na lista
-            if (!gasto) {
-                const data = await API.listarGastos({ id });
-                gasto = data.gastos?.find(g => g.id === id);
             }
             
             if (gasto) {
@@ -371,11 +376,7 @@ const Gastos = {
             }
         } catch (error) {
             console.error('Erro ao carregar gasto:', error);
-            if (window.Notificacao) {
-                Notificacao.mostrar('Erro ao carregar gasto', 'danger');
-            } else {
-                alert('Erro ao carregar gasto');
-            }
+            App.showNotification('Erro ao carregar gasto', 'danger');
         } finally {
             UI.hideLoading();
         }
@@ -388,21 +389,13 @@ const Gastos = {
             UI.showLoading();
             await API.excluirGasto(id);
             
-            if (window.Notificacao) {
-                Notificacao.mostrar('Gasto excluído!', 'success');
-            } else {
-                alert('Gasto excluído!');
-            }
+            App.showNotification('Gasto excluído!', 'success');
             
             await this.carregarGastos();
             await this.carregarResumoRapido();
         } catch (error) {
             console.error('Erro ao excluir:', error);
-            if (window.Notificacao) {
-                Notificacao.mostrar(error.message, 'danger');
-            } else {
-                alert(error.message);
-            }
+            App.showNotification(error.message, 'danger');
         } finally {
             UI.hideLoading();
         }
@@ -430,10 +423,10 @@ const Gastos = {
             const mesSelect = document.getElementById('resumoMes');
             const anoInput = document.getElementById('resumoAno');
             
-            const mes = mesSelect ? mesSelect.value : new Date().getMonth() + 1;
-            const ano = anoInput ? anoInput.value : new Date().getFullYear();
+            const mes = mesSelect ? parseInt(mesSelect.value) : new Date().getMonth() + 1;
+            const ano = anoInput ? parseInt(anoInput.value) : new Date().getFullYear();
             
-            const resumo = await API.resumoMensal({ mes, ano });
+            const resumo = await API.resumoMensalGastos({ mes, ano });
             
             const container = document.getElementById('resumoConteudo');
             if (!container) return;
@@ -488,11 +481,7 @@ const Gastos = {
             
         } catch (error) {
             console.error('Erro ao carregar resumo:', error);
-            if (window.Notificacao) {
-                Notificacao.mostrar('Erro ao carregar resumo', 'danger');
-            } else {
-                alert('Erro ao carregar resumo');
-            }
+            App.showNotification('Erro ao carregar resumo', 'danger');
         } finally {
             UI.hideLoading();
         }
@@ -502,18 +491,11 @@ const Gastos = {
         const mes = this.filtros.mes;
         const ano = this.filtros.ano;
         
-        // CORREÇÃO: Usar a rota correta para exportação
         const token = API.getToken();
-        const url = `${API.baseURL}/exportar/resumo-gastos?mes=${mes}&ano=${ano}&token=${token}`;
+        const url = `${API.baseURL}/gastos/exportar/resumo?mes=${mes}&ano=${ano}&token=${token}`;
         
-        // Abrir em nova aba para download
         window.open(url, '_blank');
-        
-        if (window.Notificacao) {
-            Notificacao.mostrar('Exportando relatório...', 'info', 2000);
-        } else {
-            alert('Exportando relatório...');
-        }
+        App.showNotification('Exportando relatório...', 'info', 2000);
     }
 };
 
@@ -523,3 +505,8 @@ document.addEventListener('DOMContentLoaded', () => {
         Gastos.init();
     }
 });
+
+// Exportar para uso global
+if (typeof window !== 'undefined') {
+    window.Gastos = Gastos;
+}
