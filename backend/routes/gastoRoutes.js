@@ -15,28 +15,46 @@ console.log('✅ Middleware auth aplicado');
 
 // Rotas de gastos (apenas admin)
 console.log('📌 Configurando rotas...');
-router.get('/', isAdmin, gastoController.listar);
-router.get('/:id', isAdmin, gastoController.buscarPorId);
-router.post('/', isAdmin, gastoController.criar);
-router.put('/:id', isAdmin, gastoController.atualizar);
-router.delete('/:id', isAdmin, gastoController.excluir);
 
-// Categorias de gastos
+// ============================================
+// IMPORTANTE: Rotas específicas PRIMEIRO
+// ============================================
+
+// Categorias de gastos (ESPECÍFICAS)
 router.get('/categorias', isAdmin, gastoController.listarCategorias);
-console.log('✅ Rota /categorias configurada');
+console.log('✅ Rota GET /categorias configurada');
 router.post('/categorias', isAdmin, gastoController.criarCategoria);
+console.log('✅ Rota POST /categorias configurada');
 router.delete('/categorias/:id', isAdmin, gastoController.excluirCategoria);
+console.log('✅ Rota DELETE /categorias/:id configurada');
 
-// Formas de pagamento
+// Formas de pagamento (ESPECÍFICAS)
 router.get('/formas-pagamento', isAdmin, gastoController.listarFormasPagamento);
-console.log('✅ Rota /formas-pagamento configurada');
+console.log('✅ Rota GET /formas-pagamento configurada');
 
-// Resumo
+// Resumos (ESPECÍFICOS)
 router.get('/resumo/mensal', isAdmin, gastoController.resumoMensal);
+console.log('✅ Rota GET /resumo/mensal configurada');
 router.get('/resumo/simplificado', isAdmin, gastoController.resumoSimplificado);
+console.log('✅ Rota GET /resumo/simplificado configurada');
 
-// Exportação
+// Exportação (ESPECÍFICA)
 router.get('/exportar/resumo', isAdmin, gastoController.exportarResumo);
+console.log('✅ Rota GET /exportar/resumo configurada');
+
+// ============================================
+// Rotas com parâmetros DEPOIS
+// ============================================
+router.get('/', isAdmin, gastoController.listar);
+console.log('✅ Rota GET / configurada');
+router.get('/:id', isAdmin, gastoController.buscarPorId);
+console.log('✅ Rota GET /:id configurada');
+router.post('/', isAdmin, gastoController.criar);
+console.log('✅ Rota POST / configurada');
+router.put('/:id', isAdmin, gastoController.atualizar);
+console.log('✅ Rota PUT /:id configurada');
+router.delete('/:id', isAdmin, gastoController.excluir);
+console.log('✅ Rota DELETE /:id configurada');
 
 console.log('✅ Todas as rotas de gastos configuradas!');
 console.log('🚀 ========== GASTO ROUTES CARREGADO ==========');
