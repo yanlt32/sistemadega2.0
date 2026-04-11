@@ -1,12 +1,12 @@
 // ============================================
 // PODPÁ - SISTEMA DE GESTÃO PROFISSIONAL
-// VERSÃO: 2.1.0 COMPLETA
+// VERSÃO: 2.1.0
 // ============================================
 
 // Garantir que não haja duplicação de declarações
 if (typeof window.App === 'undefined') {
 
-// Controle de inicialização
+// Controle de inicialização para evitar loops
 let isInitializing = false;
 let initializedPages = new Set();
 
@@ -26,6 +26,7 @@ class App {
     }
 
     static init() {
+        // Evita múltiplas inicializações
         if (isInitializing) {
             console.log('⚠️ App já está inicializando, ignorando...');
             return;
@@ -34,6 +35,7 @@ class App {
         isInitializing = true;
         console.log(`🍷 PodPá v${this.version} inicializado`);
         
+        // Inicializar módulos baseados na página atual
         this.setupEventListeners();
         this.checkCurrentPage();
         
@@ -41,20 +43,27 @@ class App {
     }
 
     static setupEventListeners() {
+        // Evento global para teclas de atalho
         document.addEventListener('keydown', (e) => {
+            // Ctrl + K para focar busca
             if (e.ctrlKey && e.key === 'k') {
                 e.preventDefault();
                 const searchInput = document.querySelector('input[type="search"], .search-bar input');
-                if (searchInput) searchInput.focus();
+                if (searchInput) {
+                    searchInput.focus();
+                }
             }
             
+            // Esc para fechar modais
             if (e.key === 'Escape') {
                 this.closeAllModals();
             }
         });
 
+        // Configurar logout em todas as páginas (evitar duplicação)
         const logoutBtn = document.getElementById('logoutBtn');
         if (logoutBtn) {
+            // Remove listener antigo se existir
             const newLogoutBtn = logoutBtn.cloneNode(true);
             logoutBtn.parentNode.replaceChild(newLogoutBtn, logoutBtn);
             newLogoutBtn.addEventListener('click', () => Auth.logout());
@@ -65,10 +74,11 @@ class App {
         const path = window.location.pathname;
         const user = Auth.getCurrentUser();
         
-        console.log('📄 Página atual:', path, 'Usuário:', user?.username || 'nenhum');
+        console.log('Página atual:', path, 'Usuário:', user?.username || 'nenhum');
         
+        // Verificar se já inicializou esta página
         if (initializedPages.has(path)) {
-            console.log(`⚠️ Página ${path} já foi inicializada`);
+            console.log(`⚠️ Página ${path} já foi inicializada, ignorando...`);
             return;
         }
         
@@ -77,22 +87,29 @@ class App {
             return;
         }
         
-        // DASHBOARD
+        // DASHBOARD - ADMIN TEM DASHBOARD COMPLETO
         if (path.includes('dashboard.html')) {
             if (user && user.role === 'admin') {
-                console.log('📊 Carregando dashboard admin');
+                console.log('Carregando dashboard admin');
                 if (window.DashboardAdmin) {
-                    if (window.DashboardAdmin.destroy) window.DashboardAdmin.destroy();
+                    // Limpar instância anterior se existir
+                    if (window.DashboardAdmin.destroy) {
+                        window.DashboardAdmin.destroy();
+                    }
                     DashboardAdmin.init();
+                    initializedPages.add(path);
+                } else if (window.Dashboard) {
+                    Dashboard.init();
                     initializedPages.add(path);
                 }
             } else {
+                console.log('Redirecionando para vendas (não é admin)');
                 window.location.href = '/vendas.html';
             }
             return;
         }
         
-        // PRODUTOS
+        // PRODUTOS - todos podem
         if (path.includes('produtos.html')) {
             if (window.Produtos) {
                 Produtos.init();
@@ -101,7 +118,7 @@ class App {
             return;
         }
         
-        // VENDAS
+        // VENDAS - todos podem
         if (path.includes('vendas.html')) {
             if (window.Vendas) {
                 Vendas.init();
@@ -110,7 +127,7 @@ class App {
             return;
         }
         
-        // HISTÓRICO
+        // HISTÓRICO - todos podem
         if (path.includes('historico-vendas.html')) {
             if (window.HistoricoVendas) {
                 HistoricoVendas.init();
@@ -119,7 +136,7 @@ class App {
             return;
         }
         
-        // CATEGORIAS
+        // CATEGORIAS - apenas admin
         if (path.includes('categorias.html')) {
             if (user?.role === 'admin') {
                 if (window.CategoriasManager) {
@@ -132,7 +149,7 @@ class App {
             return;
         }
         
-        // RELATÓRIOS
+        // RELATÓRIOS - apenas admin
         if (path.includes('relatorios.html')) {
             if (user?.role === 'admin') {
                 if (window.RelatoriosExternos) {
@@ -148,7 +165,7 @@ class App {
             return;
         }
         
-        // GASTOS
+        // GASTOS - apenas admin
         if (path.includes('gastos.html')) {
             if (user?.role === 'admin') {
                 if (window.Gastos) {
@@ -161,7 +178,7 @@ class App {
             return;
         }
         
-        // FINANCEIRO
+        // FINANCEIRO - apenas admin
         if (path.includes('financeiro.html')) {
             if (user?.role === 'admin') {
                 if (window.Financeiro) {
@@ -174,7 +191,7 @@ class App {
             return;
         }
         
-        // CAIXA
+        // CAIXA - todos podem ver status
         if (path.includes('caixa.html')) {
             if (window.Caixa) {
                 Caixa.init();
@@ -193,25 +210,23 @@ class App {
     static showNotification(message, type = 'info', duration = 3000) {
         if (!this.config.notifications) return;
         
+        // Usar o sistema de notificação melhorado se disponível
         if (window.Notificacao) {
             window.Notificacao.mostrar(message, type, duration);
             return;
         }
         
+        // Fallback
         const notification = document.createElement('div');
-        const bgColor = type === 'success' ? '#10b981' : type === 'danger' ? '#ef4444' : type === 'warning' ? '#f59e0b' : '#3b82f6';
-        
-        notification.innerHTML = `
-            <div style="background: ${bgColor}; color: white; padding: 12px 20px; border-radius: 8px; 
-                        margin-bottom: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-weight: 500;">
-                ${message}
-            </div>
-        `;
+        notification.className = `alert alert-${type}`;
+        notification.innerHTML = message;
         notification.style.position = 'fixed';
-        notification.style.bottom = '20px';
+        notification.style.top = '20px';
         notification.style.right = '20px';
         notification.style.zIndex = '9999';
+        notification.style.maxWidth = '350px';
         notification.style.animation = 'slideIn 0.3s ease';
+        notification.style.boxShadow = '0 5px 15px rgba(0,0,0,0.3)';
         
         document.body.appendChild(notification);
         
@@ -221,241 +236,6 @@ class App {
         }, duration);
     }
 }
-
-// ============================================
-// API - COMUNICAÇÃO COM BACKEND
-// ============================================
-const API = {
-    baseURL: 'https://sistemadega.onrender.com/api',
-    
-    async request(endpoint, options = {}) {
-        const token = localStorage.getItem('token');
-        const headers = {
-            'Content-Type': 'application/json',
-            ...options.headers
-        };
-        
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-        }
-        
-        const config = {
-            ...options,
-            headers
-        };
-        
-        try {
-            const response = await fetch(`${this.baseURL}${endpoint}`, config);
-            const data = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(data.message || data.error || 'Erro na requisição');
-            }
-            
-            return data;
-        } catch (error) {
-            console.error(`❌ API Error ${endpoint}:`, error);
-            throw error;
-        }
-    },
-    
-    // Autenticação
-    async login(username, password) {
-        return this.request('/auth/login', {
-            method: 'POST',
-            body: JSON.stringify({ username, password })
-        });
-    },
-    
-    async verificarToken() {
-        return this.request('/auth/verify');
-    },
-    
-    // Produtos
-    async listarProdutos(params = {}) {
-        const queryString = new URLSearchParams(params).toString();
-        return this.request(`/produtos${queryString ? `?${queryString}` : ''}`);
-    },
-    
-    async criarProduto(produto) {
-        return this.request('/produtos', {
-            method: 'POST',
-            body: JSON.stringify(produto)
-        });
-    },
-    
-    async atualizarProduto(id, produto) {
-        return this.request(`/produtos/${id}`, {
-            method: 'PUT',
-            body: JSON.stringify(produto)
-        });
-    },
-    
-    async excluirProduto(id) {
-        return this.request(`/produtos/${id}`, {
-            method: 'DELETE'
-        });
-    },
-    
-    async atualizarEstoque(id, dados) {
-        return this.request(`/produtos/${id}/estoque`, {
-            method: 'PATCH',
-            body: JSON.stringify(dados)
-        });
-    },
-    
-    async estoqueBaixo() {
-        return this.request('/produtos/estoque/baixo');
-    },
-    
-    // Vendas
-    async listarVendas(params = {}) {
-        const queryString = new URLSearchParams(params).toString();
-        return this.request(`/vendas${queryString ? `?${queryString}` : ''}`);
-    },
-    
-    async criarVenda(venda) {
-        return this.request('/vendas', {
-            method: 'POST',
-            body: JSON.stringify(venda)
-        });
-    },
-    
-    async getVenda(id) {
-        return this.request(`/vendas/${id}`);
-    },
-    
-    async cancelarVenda(id) {
-        return this.request(`/vendas/${id}/cancelar`, {
-            method: 'POST'
-        });
-    },
-    
-    // Categorias
-    async listarCategorias() {
-        return this.request('/categorias');
-    },
-    
-    async criarCategoria(categoria) {
-        return this.request('/categorias', {
-            method: 'POST',
-            body: JSON.stringify(categoria)
-        });
-    },
-    
-    async atualizarCategoria(id, categoria) {
-        return this.request(`/categorias/${id}`, {
-            method: 'PUT',
-            body: JSON.stringify(categoria)
-        });
-    },
-    
-    async excluirCategoria(id) {
-        return this.request(`/categorias/${id}`, {
-            method: 'DELETE'
-        });
-    },
-    
-    // Tipos
-    async listarTipos() {
-        return this.request('/tipos');
-    },
-    
-    async listarTiposPorCategoria(categoriaId) {
-        return this.request(`/tipos?categoria_id=${categoriaId}`);
-    },
-    
-    async criarTipo(tipo) {
-        return this.request('/tipos', {
-            method: 'POST',
-            body: JSON.stringify(tipo)
-        });
-    },
-    
-    async atualizarTipo(id, tipo) {
-        return this.request(`/tipos/${id}`, {
-            method: 'PUT',
-            body: JSON.stringify(tipo)
-        });
-    },
-    
-    async excluirTipo(id) {
-        return this.request(`/tipos/${id}`, {
-            method: 'DELETE'
-        });
-    },
-    
-    // Caixa
-    async statusCaixa() {
-        return this.request('/caixa/status');
-    },
-    
-    async abrirCaixa(dados) {
-        return this.request('/caixa/abrir', {
-            method: 'POST',
-            body: JSON.stringify(dados)
-        });
-    },
-    
-    async fecharCaixa(dados) {
-        return this.request('/caixa/fechar', {
-            method: 'POST',
-            body: JSON.stringify(dados)
-        });
-    },
-    
-    async getMovimentacoes(params = {}) {
-        const queryString = new URLSearchParams(params).toString();
-        return this.request(`/caixa/movimentacoes${queryString ? `?${queryString}` : ''}`);
-    },
-    
-    // Gastos
-    async listarGastos(params = {}) {
-        const queryString = new URLSearchParams(params).toString();
-        return this.request(`/gastos${queryString ? `?${queryString}` : ''}`);
-    },
-    
-    async criarGasto(gasto) {
-        return this.request('/gastos', {
-            method: 'POST',
-            body: JSON.stringify(gasto)
-        });
-    },
-    
-    async atualizarGasto(id, gasto) {
-        return this.request(`/gastos/${id}`, {
-            method: 'PUT',
-            body: JSON.stringify(gasto)
-        });
-    },
-    
-    async excluirGasto(id) {
-        return this.request(`/gastos/${id}`, {
-            method: 'DELETE'
-        });
-    },
-    
-    // Relatórios
-    async lucroDiario() {
-        return this.request('/relatorios/lucro/diario');
-    },
-    
-    async lucroMensal() {
-        return this.request('/relatorios/lucro/mensal');
-    },
-    
-    async vendasPorPeriodo(periodo = 'mes') {
-        return this.request(`/relatorios/vendas/${periodo}`);
-    },
-    
-    async produtosMaisVendidos(limite = 10) {
-        return this.request(`/relatorios/produtos/mais-vendidos?limite=${limite}`);
-    },
-    
-    async faturamentoPorPeriodo(dataInicio, dataFim) {
-        return this.request(`/relatorios/faturamento?data_inicio=${dataInicio}&data_fim=${dataFim}`);
-    }
-};
 
 // ============================================
 // MÓDULO DE AUTENTICAÇÃO
@@ -496,6 +276,7 @@ const Auth = {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         this.currentUser = null;
+        // Limpar páginas inicializadas
         initializedPages.clear();
         App.showNotification('Logout realizado', 'info');
         window.location.href = '/';
@@ -513,6 +294,7 @@ const Auth = {
                 return null;
             }
         }
+        
         return null;
     },
     
@@ -564,7 +346,9 @@ const Auth = {
         const roleElements = document.querySelectorAll('#userRole');
         
         elements.forEach(el => {
-            if (el) el.textContent = user?.nome || user?.username || 'Usuário';
+            if (el) {
+                el.textContent = user?.nome || user?.username || 'Usuário';
+            }
         });
         
         roleElements.forEach(el => {
@@ -602,6 +386,7 @@ const Auth = {
 
         if (!isAdmin && currentPath.includes('dashboard.html')) {
             window.location.href = '/vendas.html';
+            return;
         }
 
         if (!isAdmin && currentPath.includes('produtos.html')) {
@@ -625,39 +410,20 @@ const UI = {
             if (!loader) {
                 loader = document.createElement('div');
                 loader.id = 'global-loader';
-                loader.innerHTML = `
-                    <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-                                background: rgba(0,0,0,0.7); z-index: 9999; 
-                                display: flex; align-items: center; justify-content: center;">
-                        <div style="background: var(--bg-secondary); padding: 20px 40px; border-radius: 12px; 
-                                    box-shadow: 0 10px 25px rgba(0,0,0,0.2); text-align: center;">
-                            <div class="spinner" style="width: 40px; height: 40px; border: 4px solid var(--border-color); 
-                                                       border-top-color: var(--accent-primary); border-radius: 50%; 
-                                                       animation: spin 1s linear infinite; margin: 0 auto 15px;"></div>
-                            <p style="color: var(--text-primary);">Carregando...</p>
-                        </div>
-                    </div>
-                `;
-                document.body.appendChild(loader);
+                loader.className = 'spinner-container';
+                loader.innerHTML = '<div class="spinner"></div>';
+                loader.style.position = 'fixed';
+                loader.style.top = '0';
+                loader.style.left = '0';
+                loader.style.width = '100%';
+                loader.style.height = '100%';
+                loader.style.background = 'rgba(0,0,0,0.7)';
+                loader.style.zIndex = '9999';
+                loader.style.display = 'flex';
+                loader.style.alignItems = 'center';
+                loader.style.justifyContent = 'center';
                 
-                if (!document.querySelector('#spinner-style')) {
-                    const style = document.createElement('style');
-                    style.id = 'spinner-style';
-                    style.textContent = `
-                        @keyframes spin {
-                            to { transform: rotate(360deg); }
-                        }
-                        @keyframes slideIn {
-                            from { transform: translateX(100%); opacity: 0; }
-                            to { transform: translateX(0); opacity: 1; }
-                        }
-                        @keyframes slideOut {
-                            from { transform: translateX(0); opacity: 1; }
-                            to { transform: translateX(100%); opacity: 0; }
-                        }
-                    `;
-                    document.head.appendChild(style);
-                }
+                document.body.appendChild(loader);
             }
         }
     },
@@ -667,7 +433,9 @@ const UI = {
         
         if (this.loadingCount === 0) {
             const loader = document.getElementById('global-loader');
-            if (loader) loader.remove();
+            if (loader) {
+                loader.remove();
+            }
         }
     },
     
@@ -697,7 +465,7 @@ const UI = {
 };
 
 // ============================================
-// MÓDULO DASHBOARD ADMIN
+// MÓDULO DASHBOARD ADMIN (OTIMIZADO)
 // ============================================
 const DashboardAdmin = {
     charts: {},
@@ -734,8 +502,11 @@ const DashboardAdmin = {
             return;
         }
         
+        // Atualizar nome do usuário
         const userNomeSpan = document.getElementById('userNome');
-        if (userNomeSpan) userNomeSpan.textContent = user.nome || user.username;
+        if (userNomeSpan) {
+            userNomeSpan.textContent = user.nome || user.username;
+        }
         
         const userRoleSpan = document.getElementById('userRole');
         if (userRoleSpan) {
@@ -748,7 +519,9 @@ const DashboardAdmin = {
         await this.carregarDados();
         
         setTimeout(() => {
-            if (!this.isDestroyed) this.inicializarGraficos();
+            if (!this.isDestroyed) {
+                this.inicializarGraficos();
+            }
         }, 100);
         
         this.configurarAtualizacao();
@@ -762,21 +535,29 @@ const DashboardAdmin = {
         
         const filtroDiv = document.createElement('div');
         filtroDiv.id = 'filtroDashboard';
-        filtroDiv.style.cssText = 'display: flex; gap: 10px; margin: 15px 0; flex-wrap: wrap; justify-content: center; align-items: center;';
+        filtroDiv.style.display = 'flex';
+        filtroDiv.style.gap = '10px';
+        filtroDiv.style.margin = '15px 0';
+        filtroDiv.style.flexWrap = 'wrap';
+        filtroDiv.style.justifyContent = 'center';
+        filtroDiv.style.alignItems = 'center';
         
         filtroDiv.innerHTML = `
             <select id="filtroTipo" style="padding: 8px; border-radius: 6px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color);">
                 <option value="mes">Mês</option>
                 <option value="ano">Ano</option>
             </select>
-            <div id="filtroMesContainer">
+            
+            <div id="filtroMesContainer" style="display: inline-block;">
                 <select id="filtroMes" style="padding: 8px; border-radius: 6px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color);">
                     ${this.gerarOptionsMeses()}
                 </select>
             </div>
-            <div id="filtroAnoContainer">
+            
+            <div id="filtroAnoContainer" style="display: inline-block;">
                 <input type="number" id="filtroAno" value="${new Date().getFullYear()}" min="2020" max="2030" style="width: 100px; padding: 8px; border-radius: 6px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color);">
             </div>
+            
             <button class="btn btn-primary btn-sm" onclick="DashboardAdmin.aplicarFiltro()">Filtrar</button>
             <button class="btn btn-secondary btn-sm" onclick="DashboardAdmin.limparFiltro()">Mês Atual</button>
         `;
@@ -784,8 +565,11 @@ const DashboardAdmin = {
         topBar.parentNode.insertBefore(filtroDiv, topBar.nextSibling);
         
         document.getElementById('filtroTipo').addEventListener('change', (e) => {
+            const tipo = e.target.value;
             const mesContainer = document.getElementById('filtroMesContainer');
-            if (mesContainer) mesContainer.style.display = e.target.value === 'mes' ? 'inline-block' : 'none';
+            if (mesContainer) {
+                mesContainer.style.display = tipo === 'mes' ? 'inline-block' : 'none';
+            }
         });
     },
     
@@ -793,7 +577,9 @@ const DashboardAdmin = {
         const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
                        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
         const mesAtual = new Date().getMonth() + 1;
-        return meses.map((mes, i) => `<option value="${i + 1}" ${i + 1 === mesAtual ? 'selected' : ''}>${mes}</option>`).join('');
+        return meses.map((mes, i) => 
+            `<option value="${i + 1}" ${i + 1 === mesAtual ? 'selected' : ''}>${mes}</option>`
+        ).join('');
     },
     
     aplicarFiltro() {
@@ -848,7 +634,11 @@ const DashboardAdmin = {
     },
     
     async carregarDados() {
-        if (this.loading) return;
+        if (this.loading) {
+            console.log('⏳ Carregamento já em andamento, ignorando...');
+            return;
+        }
+        
         this.loading = true;
         
         try {
@@ -867,6 +657,9 @@ const DashboardAdmin = {
             const dataInicioStr = dataInicio.toISOString().split('T')[0];
             const dataFimStr = dataFim.toISOString().split('T')[0];
             
+            console.log('🔍 Buscando dados de:', dataInicioStr, 'até', dataFimStr);
+            
+            // Buscar vendas do período (UMA VEZ)
             const response = await API.listarVendas({ 
                 data_inicio: dataInicioStr,
                 data_fim: dataFimStr,
@@ -874,7 +667,9 @@ const DashboardAdmin = {
             });
             
             const vendas = response.vendas || [];
+            console.log('📊 Vendas encontradas:', vendas.length);
             
+            // Calcular totais do período
             let totalVendasPeriodo = 0;
             let totalLucroPeriodo = 0;
             
@@ -883,6 +678,7 @@ const DashboardAdmin = {
                 totalLucroPeriodo += v.lucro || 0;
             });
             
+            // Dados do dia
             const hoje = new Date().toISOString().split('T')[0];
             const vendasHojeResponse = await API.listarVendas({ 
                 data_inicio: hoje,
@@ -901,13 +697,17 @@ const DashboardAdmin = {
                 quantidadeHoje++;
             });
             
+            // Calcular vendas dos últimos 7 dias
             const ultimos7Dias = [];
             for (let i = 6; i >= 0; i--) {
                 const data = new Date();
                 data.setDate(data.getDate() - i);
                 const dataStr = data.toISOString().split('T')[0];
                 
-                const vendasDia = vendas.filter(v => v.data_venda?.split('T')[0] === dataStr);
+                const vendasDia = vendas.filter(v => 
+                    v.data_venda && v.data_venda.split('T')[0] === dataStr
+                );
+                
                 const totalDia = vendasDia.reduce((acc, v) => acc + (v.total || 0), 0);
                 
                 ultimos7Dias.push({
@@ -916,6 +716,7 @@ const DashboardAdmin = {
                 });
             }
             
+            // Produtos mais vendidos
             const produtosMap = new Map();
             
             for (const venda of vendas) {
@@ -938,6 +739,7 @@ const DashboardAdmin = {
                 .sort((a, b) => b.quantidade - a.quantidade)
                 .slice(0, 5);
             
+            // Buscar estoque baixo
             let estoqueBaixo = [];
             try {
                 estoqueBaixo = await API.estoqueBaixo();
@@ -945,6 +747,7 @@ const DashboardAdmin = {
                 console.warn('Erro ao buscar estoque baixo:', e);
             }
             
+            // Últimas vendas
             let ultimasVendas = [];
             try {
                 const ultimasVendasResponse = await API.listarVendas({ limite: 5 });
@@ -963,6 +766,7 @@ const DashboardAdmin = {
                 lucroPeriodo: totalLucroPeriodo,
                 quantidadePeriodo: vendas.length,
                 vendasSemana: ultimos7Dias.reduce((acc, d) => acc + d.total, 0),
+                lucroSemana: ultimos7Dias.reduce((acc, d) => acc + (d.total * 0.3), 0),
                 vendasPorDia: ultimos7Dias,
                 produtosMaisVendidos,
                 estoqueBaixo,
@@ -992,19 +796,27 @@ const DashboardAdmin = {
         if (!periodoInfo) {
             periodoInfo = document.createElement('div');
             periodoInfo.id = 'periodoInfo';
-            periodoInfo.style.cssText = 'text-align: center; margin-bottom: 10px; padding: 5px 15px; border-radius: 20px; font-size: 14px; color: var(--text-secondary); background: var(--bg-tertiary);';
+            periodoInfo.style.textAlign = 'center';
+            periodoInfo.style.marginBottom = '10px';
+            periodoInfo.style.padding = '5px 15px';
+            periodoInfo.style.borderRadius = '20px';
+            periodoInfo.style.fontSize = '14px';
+            periodoInfo.style.color = 'var(--text-secondary)';
+            periodoInfo.style.background = 'var(--bg-tertiary)';
             
             const statsGrid = document.querySelector('.dashboard-stats');
-            if (statsGrid?.parentNode) statsGrid.parentNode.insertBefore(periodoInfo, statsGrid);
+            if (statsGrid && statsGrid.parentNode) {
+                statsGrid.parentNode.insertBefore(periodoInfo, statsGrid);
+            }
         }
         
         const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
                        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
         
         if (this.filtroAtual.tipo === 'mes') {
-            periodoInfo.textContent = `📅 Período: ${meses[this.filtroAtual.mes - 1]} de ${this.filtroAtual.ano}`;
+            periodoInfo.textContent = `📅 Período filtrado: ${meses[this.filtroAtual.mes - 1]} de ${this.filtroAtual.ano}`;
         } else {
-            periodoInfo.textContent = `📅 Período: Ano de ${this.filtroAtual.ano}`;
+            periodoInfo.textContent = `📅 Período filtrado: Ano de ${this.filtroAtual.ano}`;
         }
     },
     
@@ -1013,17 +825,33 @@ const DashboardAdmin = {
             vendasHoje: document.getElementById('vendasHoje'),
             lucroHoje: document.getElementById('lucroHoje'),
             vendasSemana: document.getElementById('vendasSemana'),
+            lucroSemana: document.getElementById('lucroSemana'),
             vendasMes: document.getElementById('vendasMes'),
             estoqueBaixo: document.getElementById('estoqueBaixo'),
             ticketMedio: document.getElementById('ticketMedio')
         };
         
-        if (elementos.vendasHoje) elementos.vendasHoje.textContent = UI.formatCurrency(this.data.vendasHoje || 0);
-        if (elementos.lucroHoje) elementos.lucroHoje.textContent = UI.formatCurrency(this.data.lucroHoje || 0);
-        if (elementos.vendasSemana) elementos.vendasSemana.textContent = UI.formatCurrency(this.data.vendasSemana || 0);
-        if (elementos.vendasMes) elementos.vendasMes.textContent = UI.formatCurrency(this.data.vendasPeriodo || 0);
-        if (elementos.estoqueBaixo) elementos.estoqueBaixo.textContent = this.data.estoqueBaixo?.length || 0;
-        if (elementos.ticketMedio) elementos.ticketMedio.textContent = UI.formatCurrency(this.data.ticketMedio || 0);
+        if (elementos.vendasHoje) {
+            elementos.vendasHoje.textContent = UI.formatCurrency(this.data.vendasHoje || 0);
+        }
+        if (elementos.lucroHoje) {
+            elementos.lucroHoje.textContent = UI.formatCurrency(this.data.lucroHoje || 0);
+        }
+        if (elementos.vendasSemana) {
+            elementos.vendasSemana.textContent = UI.formatCurrency(this.data.vendasSemana || 0);
+        }
+        if (elementos.lucroSemana) {
+            elementos.lucroSemana.textContent = UI.formatCurrency(this.data.lucroSemana || 0);
+        }
+        if (elementos.vendasMes) {
+            elementos.vendasMes.textContent = UI.formatCurrency(this.data.vendasPeriodo || 0);
+        }
+        if (elementos.estoqueBaixo) {
+            elementos.estoqueBaixo.textContent = this.data.estoqueBaixo?.length || 0;
+        }
+        if (elementos.ticketMedio) {
+            elementos.ticketMedio.textContent = UI.formatCurrency(this.data.ticketMedio || 0);
+        }
     },
     
     async atualizarPagamentos() {
@@ -1032,14 +860,25 @@ const DashboardAdmin = {
         
         try {
             const hoje = new Date().toISOString().split('T')[0];
-            const response = await API.listarVendas({ data_inicio: hoje, data_fim: hoje, limite: 100 });
+            const response = await API.listarVendas({ 
+                data_inicio: hoje,
+                data_fim: hoje,
+                limite: 100
+            });
+            
             const vendas = response.vendas || [];
             
             const pagamentos = {};
             vendas.forEach(v => {
                 const forma = v.forma_pagamento || 'Outros';
-                if (!pagamentos[forma]) pagamentos[forma] = { forma, quantidade: 0, total: 0 };
-                pagamentos[forma].quantidade++;
+                if (!pagamentos[forma]) {
+                    pagamentos[forma] = {
+                        forma: forma,
+                        quantidade: 0,
+                        total: 0
+                    };
+                }
+                pagamentos[forma].quantidade += 1;
                 pagamentos[forma].total += v.total || 0;
             });
             
@@ -1084,7 +923,11 @@ const DashboardAdmin = {
                             backgroundColor: 'rgba(196, 167, 71, 0.1)',
                             borderWidth: 3,
                             tension: 0.4,
-                            fill: true
+                            fill: true,
+                            pointBackgroundColor: '#c4a747',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2,
+                            pointRadius: 4
                         }]
                     },
                     options: {
@@ -1092,12 +935,23 @@ const DashboardAdmin = {
                         maintainAspectRatio: false,
                         plugins: { legend: { display: false } },
                         scales: {
-                            y: { grid: { color: '#2d3540' }, ticks: { color: '#94a3b8', callback: (v) => 'R$ ' + v } },
-                            x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                            y: {
+                                grid: { color: '#2d3540' },
+                                ticks: {
+                                    color: '#94a3b8',
+                                    callback: (value) => 'R$ ' + value
+                                }
+                            },
+                            x: {
+                                grid: { display: false },
+                                ticks: { color: '#94a3b8' }
+                            }
                         }
                     }
                 });
-            } catch (e) { console.error('Erro ao criar gráfico de vendas:', e); }
+            } catch (e) {
+                console.error('Erro ao criar gráfico de vendas:', e);
+            }
         }
         
         const ctxProdutos = document.getElementById('graficoProdutos');
@@ -1106,20 +960,36 @@ const DashboardAdmin = {
                 this.charts.produtos = new Chart(ctxProdutos, {
                     type: 'bar',
                     data: {
-                        labels: this.data.produtosMaisVendidos.map(p => p.nome.length > 10 ? p.nome.substring(0, 10) + '...' : p.nome),
-                        datasets: [{ label: 'Quantidade Vendida', data: this.data.produtosMaisVendidos.map(p => p.quantidade), backgroundColor: '#c4a747', borderRadius: 6 }]
+                        labels: this.data.produtosMaisVendidos.map(p => 
+                            p.nome.length > 10 ? p.nome.substring(0, 10) + '...' : p.nome
+                        ),
+                        datasets: [{
+                            label: 'Quantidade Vendida',
+                            data: this.data.produtosMaisVendidos.map(p => p.quantidade),
+                            backgroundColor: '#c4a747',
+                            borderRadius: 6
+                        }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: { legend: { display: false } },
                         scales: {
-                            y: { beginAtZero: true, grid: { color: '#2d3540' }, ticks: { color: '#94a3b8', stepSize: 1 } },
-                            x: { grid: { display: false }, ticks: { color: '#94a3b8', maxRotation: 45 } }
+                            y: {
+                                beginAtZero: true,
+                                grid: { color: '#2d3540' },
+                                ticks: { color: '#94a3b8', stepSize: 1 }
+                            },
+                            x: {
+                                grid: { display: false },
+                                ticks: { color: '#94a3b8', maxRotation: 45 }
+                            }
                         }
                     }
                 });
-            } catch (e) { console.error('Erro ao criar gráfico de produtos:', e); }
+            } catch (e) {
+                console.error('Erro ao criar gráfico de produtos:', e);
+            }
         }
     },
     
@@ -1130,7 +1000,9 @@ const DashboardAdmin = {
         }
         
         if (this.charts.produtos && this.data.produtosMaisVendidos.length > 0) {
-            this.charts.produtos.data.labels = this.data.produtosMaisVendidos.map(p => p.nome.length > 10 ? p.nome.substring(0, 10) + '...' : p.nome);
+            this.charts.produtos.data.labels = this.data.produtosMaisVendidos.map(p => 
+                p.nome.length > 10 ? p.nome.substring(0, 10) + '...' : p.nome
+            );
             this.charts.produtos.data.datasets[0].data = this.data.produtosMaisVendidos.map(p => p.quantidade);
             this.charts.produtos.update();
         }
@@ -1148,6 +1020,7 @@ const DashboardAdmin = {
                 parent.replaceChild(newCanvas, oldCanvas);
             }
         };
+        
         recriarCanvas('graficoVendasSemana');
         recriarCanvas('graficoProdutos');
     },
@@ -1156,14 +1029,17 @@ const DashboardAdmin = {
         const container = document.getElementById('estoqueBaixoLista');
         if (!container) return;
         
-        if (!this.data.estoqueBaixo?.length) {
-            container.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding: 20px;">✅ Todos os produtos com estoque adequado</div>`;
+        if (!this.data.estoqueBaixo || this.data.estoqueBaixo.length === 0) {
+            container.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding: 20px;">✅ Todos os produtos estão com estoque adequado</div>`;
             return;
         }
         
         container.innerHTML = this.data.estoqueBaixo.slice(0, 5).map(p => `
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid var(--border-color);">
-                <div><strong>${p.nome}</strong><br><small style="color: var(--text-muted);">Estoque: ${p.quantidade} unidades</small></div>
+                <div>
+                    <strong>${p.nome}</strong><br>
+                    <small style="color: var(--text-muted);">Estoque: ${p.quantidade} unidades</small>
+                </div>
                 <button class="btn btn-primary btn-sm" onclick="if(window.Produtos) Produtos.abrirModalEstoque(${p.id})">Repor</button>
             </div>
         `).join('');
@@ -1194,7 +1070,7 @@ const DashboardAdmin = {
         const tbody = document.querySelector('#tabelaUltimasVendas tbody');
         if (!tbody) return;
         
-        if (!this.data.ultimasVendas?.length) {
+        if (!this.data.ultimasVendas || this.data.ultimasVendas.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">Nenhuma venda recente</td></tr>';
             return;
         }
@@ -1211,6 +1087,7 @@ const DashboardAdmin = {
     
     configurarAtualizacao() {
         if (this.refreshInterval) clearInterval(this.refreshInterval);
+        // Atualizar a cada 60 segundos (menos requisições)
         this.refreshInterval = setInterval(() => {
             if (document.visibilityState === 'visible' && !this.loading && !this.isDestroyed) {
                 this.carregarDados();
@@ -1220,61 +1097,101 @@ const DashboardAdmin = {
 };
 
 // ============================================
-// MÓDULO DE PRODUTOS - CORRIGIDO
+// DASHBOARD FALLBACK (para funcionários)
+// ============================================
+const Dashboard = {
+    async init() {
+        console.log('Dashboard fallback para funcionários');
+        const user = Auth.getCurrentUser();
+        if (user && user.role === 'admin') {
+            if (window.DashboardAdmin) {
+                await DashboardAdmin.init();
+                return;
+            }
+        }
+        window.location.href = '/vendas.html';
+    }
+};
+
+// ============================================
+// MÓDULO DE PRODUTOS (VERSÃO SIMPLIFICADA)
 // ============================================
 const Produtos = {
     paginaAtual: 1,
     totalPaginas: 1,
-    filtros: { categoria: 'todas', busca: '', estoqueBaixo: false },
+    filtros: {
+        categoria: 'todas',
+        busca: '',
+        estoqueBaixo: false
+    },
     produtos: [],
     produtoEditando: null,
     
     async init() {
-        console.log('📦 Inicializando módulo de produtos...');
         await Auth.checkAuth();
         this.verificarPermissoes();
         this.setupEventListeners();
         await this.carregarCategorias();
         await this.carregar();
-        console.log('✅ Módulo de produtos inicializado');
     },
 
     verificarPermissoes() {
         this.isAdmin = Auth.isAdmin();
+        
         const btnNovo = document.getElementById('btnNovoProduto');
-        if (btnNovo) btnNovo.style.display = this.isAdmin ? 'flex' : 'none';
+        if (btnNovo) {
+            btnNovo.style.display = this.isAdmin ? 'flex' : 'none';
+        }
     },
     
     setupEventListeners() {
         const btnNovo = document.getElementById('btnNovoProduto');
-        if (btnNovo && this.isAdmin) btnNovo.addEventListener('click', () => this.abrirModal());
+        if (btnNovo && this.isAdmin) {
+            btnNovo.addEventListener('click', () => {
+                this.abrirModal();
+            });
+        }
         
         const buscaInput = document.getElementById('buscaProduto');
-        if (buscaInput) buscaInput.addEventListener('input', debounce((e) => {
-            this.filtros.busca = e.target.value;
-            this.paginaAtual = 1;
-            this.carregar();
-        }, 500));
+        if (buscaInput) {
+            buscaInput.addEventListener('input', 
+                debounce((e) => {
+                    this.filtros.busca = e.target.value;
+                    this.paginaAtual = 1;
+                    this.carregar();
+                }, 500)
+            );
+        }
         
         const filtroCategoria = document.getElementById('filtroCategoria');
-        if (filtroCategoria) filtroCategoria.addEventListener('change', (e) => {
-            this.filtros.categoria = e.target.value;
-            this.paginaAtual = 1;
-            this.carregar();
-        });
+        if (filtroCategoria) {
+            filtroCategoria.addEventListener('change', (e) => {
+                this.filtros.categoria = e.target.value;
+                this.paginaAtual = 1;
+                this.carregar();
+            });
+        }
         
         const formProduto = document.getElementById('formProduto');
-        if (formProduto && this.isAdmin) formProduto.addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.salvar();
-        });
+        if (formProduto && this.isAdmin) {
+            formProduto.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.salvar();
+            });
+        }
         
         const closeBtn = document.querySelector('#modalProduto .close');
-        if (closeBtn) closeBtn.addEventListener('click', () => this.fecharModal());
-        
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                this.fecharModal();
+            });
+        }
+
         window.addEventListener('click', (e) => {
             const modal = document.getElementById('modalProduto');
-            if (e.target === modal) this.fecharModal();
+            if (e.target === modal) {
+                this.fecharModal();
+            }
         });
     },
     
@@ -1283,11 +1200,16 @@ const Produtos = {
             const categorias = await API.listarCategorias();
             
             const filtroSelect = document.getElementById('filtroCategoria');
-            if (filtroSelect) filtroSelect.innerHTML = '<option value="todas">Todas categorias</option>' + categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+            if (filtroSelect) {
+                filtroSelect.innerHTML = '<option value="todas">Todas categorias</option>' +
+                    categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+            }
             
             const modalSelect = document.getElementById('produtoCategoria');
             if (modalSelect && this.isAdmin) {
-                modalSelect.innerHTML = '<option value="">Selecione uma categoria</option>' + categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+                modalSelect.innerHTML = '<option value="">Selecione uma categoria</option>' +
+                    categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+                
                 modalSelect.addEventListener('change', () => this.carregarTipos());
             }
         } catch (error) {
@@ -1297,13 +1219,22 @@ const Produtos = {
     
     async carregarTipos(categoriaId = null) {
         if (!this.isAdmin) return;
+        
         try {
             const select = document.getElementById('produtoTipo');
             if (!select) return;
+            
             categoriaId = categoriaId || document.getElementById('produtoCategoria')?.value;
-            if (!categoriaId) { select.innerHTML = '<option value="">Selecione uma categoria primeiro</option>'; return; }
+            
+            if (!categoriaId) {
+                select.innerHTML = '<option value="">Selecione uma categoria primeiro</option>';
+                return;
+            }
+            
             const tipos = await API.listarTiposPorCategoria(categoriaId);
-            select.innerHTML = '<option value="">Selecione um tipo</option>' + tipos.map(t => `<option value="${t.id}">${t.nome}</option>`).join('');
+            
+            select.innerHTML = '<option value="">Selecione um tipo</option>' +
+                tipos.map(t => `<option value="${t.id}">${t.nome}</option>`).join('');
         } catch (error) {
             console.error('Erro ao carregar tipos:', error);
         }
@@ -1312,13 +1243,24 @@ const Produtos = {
     async carregar() {
         try {
             UI.showLoading();
-            const params = { page: this.paginaAtual, limit: 10 };
-            if (this.filtros.busca) params.busca = this.filtros.busca;
-            if (this.filtros.categoria && this.filtros.categoria !== 'todas') params.categoria = this.filtros.categoria;
+            
+            const params = {
+                page: this.paginaAtual,
+                limit: 10
+            };
+            
+            if (this.filtros.busca) {
+                params.busca = this.filtros.busca;
+            }
+            
+            if (this.filtros.categoria && this.filtros.categoria !== 'todas') {
+                params.categoria = this.filtros.categoria;
+            }
             
             const data = await API.listarProdutos(params);
             this.produtos = data.produtos || [];
             this.totalPaginas = data.totalPages || 1;
+            
             this.renderizar();
             this.renderizarPaginacao();
         } catch (error) {
@@ -1334,11 +1276,24 @@ const Produtos = {
         if (!tbody) return;
         
         if (this.produtos.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 50px;"><div style="font-size: 48px; margin-bottom: 20px;">📦</div><h3>Nenhum produto encontrado</h3><p style="color: var(--text-muted);">${this.isAdmin ? 'Clique em "Novo Produto" para começar' : 'Nenhum produto cadastrado'}</p></td></tr>`;
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" style="text-align: center; padding: 50px;">
+                        <div style="font-size: 48px; margin-bottom: 20px;">📦</div>
+                        <h3>Nenhum produto encontrado</h3>
+                        <p style="color: var(--text-muted); margin-top: 10px;">
+                            ${this.isAdmin ? 'Clique em "Novo Produto" para começar' : 'Nenhum produto cadastrado'}
+                        </p>
+                    </td>
+                </tr>
+            `;
             return;
         }
         
         tbody.innerHTML = this.produtos.map(p => {
+            const precoCustoDisplay = this.isAdmin ? UI.formatCurrency(p.preco_custo) : '---';
+            const codigoBarrasDisplay = p.codigo_barras || '-';
+            
             const acoesDisplay = this.isAdmin ? `
                 <div style="display: flex; gap: 5px;">
                     <button class="btn btn-primary btn-sm" onclick="Produtos.editar(${p.id})" title="Editar">✏️</button>
@@ -1347,32 +1302,51 @@ const Produtos = {
                 </div>
             ` : '<span class="badge badge-info">Apenas visualização</span>';
             
-            return `<tr>
-                <td><strong>${p.nome || '-'}</strong></td>
-                <td>${p.categoria_nome || '-'}</td>
-                <td>${p.tipo_nome || '-'}</td>
-                <td>${this.isAdmin ? UI.formatCurrency(p.preco_custo) : '---'}</td>
-                <td>${UI.formatCurrency(p.preco_venda)}</td>
-                <td><span class="badge ${(p.quantidade || 0) < 5 ? 'badge-warning' : 'badge-success'}">${p.quantidade || 0}</span></td>
-                <td>${p.codigo_barras || '-'}</td>
-                <td>${acoesDisplay}</td>
-            </tr>`;
+            return `
+                <tr>
+                    <td><strong>${p.nome || '-'}</strong></td>
+                    <td>${p.categoria_nome || '-'}</td>
+                    <td>${p.tipo_nome || '-'}</td>
+                    <td>${precoCustoDisplay}</td>
+                    <td>${UI.formatCurrency(p.preco_venda)}</td>
+                    <td>
+                        <span class="badge ${(p.quantidade || 0) < 5 ? 'badge-warning' : 'badge-success'}">
+                            ${p.quantidade || 0}
+                        </span>
+                    </td>
+                    <td>${codigoBarrasDisplay}</td>
+                    <td>${acoesDisplay}</td>
+                </tr>
+            `;
         }).join('');
     },
     
     renderizarPaginacao() {
         const container = document.getElementById('paginacao');
-        if (!container || this.totalPaginas <= 1) { if(container) container.innerHTML = ''; return; }
+        if (!container) return;
         
-        let html = `<button onclick="Produtos.irParaPagina(${this.paginaAtual - 1})" ${this.paginaAtual === 1 ? 'disabled' : ''}>◀</button>`;
+        if (this.totalPaginas <= 1) {
+            container.innerHTML = '';
+            return;
+        }
+        
+        let html = '';
+        html += `<button onclick="Produtos.irParaPagina(${this.paginaAtual - 1})" 
+                 ${this.paginaAtual === 1 ? 'disabled' : ''}>◀</button>`;
+        
         for (let i = 1; i <= this.totalPaginas; i++) {
-            if (i === 1 || i === this.totalPaginas || (i >= this.paginaAtual - 2 && i <= this.paginaAtual + 2)) {
-                html += `<button class="${i === this.paginaAtual ? 'active' : ''}" onclick="Produtos.irParaPagina(${i})">${i}</button>`;
+            if (i === 1 || i === this.totalPaginas || 
+                (i >= this.paginaAtual - 2 && i <= this.paginaAtual + 2)) {
+                html += `<button class="${i === this.paginaAtual ? 'active' : ''}" 
+                         onclick="Produtos.irParaPagina(${i})">${i}</button>`;
             } else if (i === this.paginaAtual - 3 || i === this.paginaAtual + 3) {
                 html += `<button disabled>...</button>`;
             }
         }
-        html += `<button onclick="Produtos.irParaPagina(${this.paginaAtual + 1})" ${this.paginaAtual === this.totalPaginas ? 'disabled' : ''}>▶</button>`;
+        
+        html += `<button onclick="Produtos.irParaPagina(${this.paginaAtual + 1})"
+                 ${this.paginaAtual === this.totalPaginas ? 'disabled' : ''}>▶</button>`;
+        
         container.innerHTML = html;
     },
     
@@ -1383,11 +1357,18 @@ const Produtos = {
     },
     
     abrirModal(produto = null) {
-        if (!this.isAdmin) { App.showNotification('Apenas administradores podem editar produtos', 'warning'); return; }
+        if (!this.isAdmin) {
+            App.showNotification('Apenas administradores podem editar produtos', 'warning');
+            return;
+        }
+        
         this.produtoEditando = produto;
+        
         const modal = document.getElementById('modalProduto');
         const titulo = document.getElementById('modalTitulo');
+        
         if (!modal) return;
+        
         titulo.textContent = produto ? '✏️ Editar Produto' : '➕ Novo Produto';
         
         if (produto) {
@@ -1400,26 +1381,34 @@ const Produtos = {
             document.getElementById('produtoQuantidade').value = produto.quantidade || 0;
             document.getElementById('produtoCodigoBarras').value = produto.codigo_barras || '';
         } else {
-            document.getElementById('formProduto')?.reset();
+            document.getElementById('formProduto').reset();
         }
         
         if (produto?.categoria_id) {
             this.carregarTipos(produto.categoria_id).then(() => {
-                if (produto.tipo_id) document.getElementById('produtoTipo').value = produto.tipo_id;
+                if (produto.tipo_id) {
+                    document.getElementById('produtoTipo').value = produto.tipo_id;
+                }
             });
         }
+        
         modal.style.display = 'block';
     },
     
     fecharModal() {
         const modal = document.getElementById('modalProduto');
-        if (modal) { modal.style.display = 'none'; this.produtoEditando = null; }
+        if (modal) {
+            modal.style.display = 'none';
+            this.produtoEditando = null;
+        }
     },
     
     async salvar() {
         if (!this.isAdmin) return;
+        
         try {
             UI.showLoading();
+            
             const produto = {
                 nome: document.getElementById('produtoNome')?.value,
                 categoria_id: document.getElementById('produtoCategoria')?.value,
@@ -1429,6 +1418,7 @@ const Produtos = {
                 quantidade: parseInt(document.getElementById('produtoQuantidade')?.value) || 0,
                 codigo_barras: document.getElementById('produtoCodigoBarras')?.value || null
             };
+            
             if (!produto.nome) throw new Error('Nome é obrigatório');
             if (!produto.categoria_id) throw new Error('Categoria é obrigatória');
             if (!produto.tipo_id) throw new Error('Tipo é obrigatório');
@@ -1440,8 +1430,10 @@ const Produtos = {
                 await API.criarProduto(produto);
                 App.showNotification('Produto criado com sucesso!', 'success');
             }
+            
             this.fecharModal();
             await this.carregar();
+            
         } catch (error) {
             App.showNotification(error.message, 'danger');
         } finally {
@@ -1452,23 +1444,43 @@ const Produtos = {
     async editar(id) {
         if (!this.isAdmin) return;
         const produto = this.produtos.find(p => p.id === id);
-        if (produto) this.abrirModal(produto);
+        if (produto) {
+            this.abrirModal(produto);
+        }
     },
     
     abrirModalEstoque(id) {
-        if (!this.isAdmin) { App.showNotification('Apenas administradores podem ajustar estoque', 'warning'); return; }
+        if (!this.isAdmin) {
+            App.showNotification('Apenas administradores podem ajustar estoque', 'warning');
+            return;
+        }
+        
         const produto = this.produtos.find(p => p.id === id);
         if (!produto) return;
+        
         const quantidade = prompt(`Digite a nova quantidade em estoque para ${produto.nome}:`, produto.quantidade);
-        if (quantidade !== null) this.atualizarEstoque(id, parseInt(quantidade));
+        
+        if (quantidade !== null) {
+            this.atualizarEstoque(id, parseInt(quantidade));
+        }
     },
     
     async atualizarEstoque(id, quantidade) {
         if (!this.isAdmin) return;
+        
         try {
             UI.showLoading();
-            if (isNaN(quantidade) || quantidade < 0) throw new Error('Quantidade inválida');
-            await API.atualizarEstoque(id, { quantidade, tipo: 'ajuste', observacao: 'Ajuste manual' });
+            
+            if (isNaN(quantidade) || quantidade < 0) {
+                throw new Error('Quantidade inválida');
+            }
+            
+            await API.atualizarEstoque(id, {
+                quantidade,
+                tipo: 'ajuste',
+                observacao: 'Ajuste manual'
+            });
+            
             App.showNotification('Estoque atualizado com sucesso!', 'success');
             await this.carregar();
         } catch (error) {
@@ -1479,10 +1491,17 @@ const Produtos = {
     },
     
     async excluir(id) {
-        if (!this.isAdmin) { App.showNotification('Apenas administradores podem excluir produtos', 'warning'); return; }
+        if (!this.isAdmin) {
+            App.showNotification('Apenas administradores podem excluir produtos', 'warning');
+            return;
+        }
+        
         const produto = this.produtos.find(p => p.id === id);
         if (!produto) return;
-        if (!confirm(`⚠️ Tem certeza que deseja excluir o produto "${produto.nome}"?`)) return;
+        
+        if (!confirm(`⚠️ Tem certeza que deseja excluir o produto "${produto.nome}"?`)) {
+            return;
+        }
         
         try {
             UI.showLoading();
@@ -1490,6 +1509,7 @@ const Produtos = {
             App.showNotification('✅ Produto excluído com sucesso!', 'success');
             await this.carregar();
         } catch (error) {
+            console.error('Erro ao excluir produto:', error);
             App.showNotification('❌ ' + (error.message || 'Erro ao excluir produto'), 'danger');
         } finally {
             UI.hideLoading();
@@ -1498,7 +1518,7 @@ const Produtos = {
 };
 
 // ============================================
-// MÓDULO DE VENDAS - COMPLETO E CORRIGIDO
+// MÓDULO DE VENDAS - CORRIGIDO
 // ============================================
 const Vendas = {
     carrinho: [],
@@ -1519,33 +1539,72 @@ const Vendas = {
         try {
             const status = await API.statusCaixa();
             const btnFinalizar = document.getElementById('btnFinalizarVenda');
-            if (btnFinalizar) {
-                btnFinalizar.disabled = !status.aberto;
-                btnFinalizar.style.opacity = status.aberto ? '1' : '0.5';
-                btnFinalizar.title = status.aberto ? '' : 'Caixa fechado. Não é possível realizar vendas.';
+            
+            if (!status || !status.aberto) {
+                if (btnFinalizar) {
+                    btnFinalizar.disabled = true;
+                    btnFinalizar.style.opacity = '0.5';
+                    btnFinalizar.title = 'Caixa fechado. Não é possível realizar vendas.';
+                }
+            } else {
+                if (btnFinalizar) {
+                    btnFinalizar.disabled = false;
+                    btnFinalizar.style.opacity = '1';
+                    btnFinalizar.title = '';
+                }
             }
         } catch (error) {
             console.error('Erro ao verificar caixa:', error);
+            // Se erro na API, assume caixa fechado por segurança
+            const btnFinalizar = document.getElementById('btnFinalizarVenda');
+            if (btnFinalizar) {
+                btnFinalizar.disabled = true;
+                btnFinalizar.style.opacity = '0.5';
+            }
         }
     },
     
     setupEventListeners() {
         const buscaInput = document.getElementById('buscaProduto');
-        if (buscaInput) buscaInput.addEventListener('input', debounce((e) => this.buscarProdutos(e.target.value), 500));
+        if (buscaInput) {
+            buscaInput.addEventListener('input', 
+                debounce((e) => {
+                    this.buscarProdutos(e.target.value);
+                }, 500)
+            );
+        }
         
         const pagamentoSelect = document.getElementById('formaPagamento');
-        if (pagamentoSelect) pagamentoSelect.addEventListener('change', (e) => this.formaPagamento = e.target.value);
+        if (pagamentoSelect) {
+            pagamentoSelect.addEventListener('change', (e) => {
+                this.formaPagamento = e.target.value;
+                console.log('Forma de pagamento selecionada:', this.formaPagamento);
+            });
+        }
         
         const btnFinalizar = document.getElementById('btnFinalizarVenda');
-        if (btnFinalizar) btnFinalizar.addEventListener('click', () => this.finalizarVenda());
+        if (btnFinalizar) {
+            // Remove listeners antigos
+            const newBtn = btnFinalizar.cloneNode(true);
+            btnFinalizar.parentNode.replaceChild(newBtn, btnFinalizar);
+            newBtn.addEventListener('click', () => {
+                console.log('Botão finalizar clicado');
+                this.finalizarVenda();
+            });
+        }
         
         const btnLimpar = document.getElementById('btnLimparCarrinho');
-        if (btnLimpar) btnLimpar.addEventListener('click', () => {
-            if (this.carrinho.length > 0 && confirm('Limpar todo o carrinho?')) {
-                this.carrinho = [];
-                this.atualizarCarrinho();
-            }
-        });
+        if (btnLimpar) {
+            const newBtn = btnLimpar.cloneNode(true);
+            btnLimpar.parentNode.replaceChild(newBtn, btnLimpar);
+            newBtn.addEventListener('click', () => {
+                if (this.carrinho.length > 0 && confirm('Limpar todo o carrinho?')) {
+                    this.carrinho = [];
+                    this.atualizarCarrinho();
+                    App.showNotification('Carrinho limpo!', 'info');
+                }
+            });
+        }
     },
     
     async carregarProdutos() {
@@ -1559,6 +1618,18 @@ const Vendas = {
         } catch (error) {
             console.error('Erro ao carregar produtos:', error);
             App.showNotification('Erro ao carregar produtos', 'danger');
+            // Mostrar container vazio
+            const container = document.getElementById('listaProdutos');
+            if (container) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 50px; grid-column: 1/-1;">
+                        <div style="font-size: 48px;">⚠️</div>
+                        <h3>Erro ao carregar produtos</h3>
+                        <p style="color: var(--text-muted);">Tente novamente mais tarde</p>
+                        <button class="btn btn-primary" onclick="Vendas.carregarProdutos()">Tentar novamente</button>
+                    </div>
+                `;
+            }
         } finally {
             UI.hideLoading();
         }
@@ -1567,18 +1638,18 @@ const Vendas = {
     renderizarProdutos(produtos) {
         const container = document.getElementById('listaProdutos');
         if (!container) {
-            console.error('❌ Container #listaProdutos não encontrado! Criando...');
-            const main = document.querySelector('main') || document.body;
-            const newGrid = document.createElement('div');
-            newGrid.id = 'listaProdutos';
-            newGrid.className = 'produtos-grid';
-            newGrid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; padding: 20px;';
-            main.appendChild(newGrid);
-            return this.renderizarProdutos(produtos);
+            console.error('❌ Container listaProdutos não encontrado!');
+            return;
         }
         
         if (!produtos || produtos.length === 0) {
-            container.innerHTML = `<div style="text-align: center; padding: 50px; grid-column: 1/-1;"><div style="font-size: 48px;">🔍</div><h3>Nenhum produto encontrado</h3><p style="color: var(--text-muted);">Cadastre produtos para começar a vender</p></div>`;
+            container.innerHTML = `
+                <div style="text-align: center; padding: 50px; grid-column: 1/-1;">
+                    <div style="font-size: 48px;">🔍</div>
+                    <h3>Nenhum produto encontrado</h3>
+                    <p style="color: var(--text-muted);">Cadastre produtos para começar a vender</p>
+                </div>
+            `;
             return;
         }
         
@@ -1587,50 +1658,65 @@ const Vendas = {
         container.innerHTML = produtos.map(p => {
             const disponivel = (p.quantidade || 0) > 0;
             const precoFormatado = UI.formatCurrency(p.preco_venda || 0);
-            const nomeLimpo = this.escapeHtml(p.nome) || 'Sem nome';
-            const categoriaNome = this.escapeHtml(p.categoria_nome) || 'Sem categoria';
-            const tipoNome = this.escapeHtml(p.tipo_nome) || 'Sem tipo';
+            const nomeProduto = (p.nome || 'Sem nome').substring(0, 30);
+            const categoriaNome = p.categoria_nome || 'Sem categoria';
+            const tipoNome = p.tipo_nome || 'Sem tipo';
+            const estoque = p.quantidade || 0;
             
             return `
-                <div class="produto-card" data-produto-id="${p.id}" 
+                <div class="produto-card" 
+                     data-produto-id="${p.id}"
+                     data-produto-nome="${nomeProduto.replace(/"/g, '&quot;')}"
+                     data-produto-preco="${p.preco_venda || 0}"
+                     data-produto-estoque="${estoque}"
                      style="background: var(--bg-secondary); border-radius: 12px; padding: 15px; 
-                            cursor: ${disponivel ? 'pointer' : 'not-allowed'}; opacity: ${disponivel ? '1' : '0.6'};
-                            transition: transform 0.2s, box-shadow 0.2s; position: relative;
-                            border: 1px solid var(--border-color);">
-                    <h4 style="margin: 0 0 8px 0; font-size: 16px; color: var(--text-primary);">${nomeLimpo}</h4>
+                            cursor: ${disponivel ? 'pointer' : 'not-allowed'}; 
+                            opacity: ${disponivel ? '1' : '0.6'};
+                            transition: all 0.2s ease; position: relative;
+                            border: 1px solid var(--border-color);
+                            hover: ${disponivel ? 'transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15);' : ''}">
+                    <h4 style="margin: 0 0 8px 0; font-size: 16px; color: var(--text-primary);">${nomeProduto}</h4>
                     <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">
                         ${categoriaNome} • ${tipoNome}
                     </div>
                     <div style="font-size: 20px; font-weight: bold; color: var(--accent-primary); margin-bottom: 8px;">
                         ${precoFormatado}
                     </div>
-                    <div style="font-size: 12px; color: ${(p.quantidade || 0) < 5 && disponivel ? '#f59e0b' : 'var(--text-muted)'};">
-                        📦 Estoque: ${p.quantidade || 0}
+                    <div style="font-size: 12px; color: ${estoque < 5 && disponivel ? '#f59e0b' : 'var(--text-muted)'};">
+                        📦 Estoque: ${estoque}
                     </div>
                     ${!disponivel ? '<div style="position: absolute; top: 10px; right: 10px; background: #ef4444; color: white; padding: 4px 8px; border-radius: 6px; font-size: 11px;">Indisponível</div>' : ''}
                 </div>
             `;
         }).join('');
         
-        // Adicionar event listeners
-        document.querySelectorAll('.produto-card').forEach(card => {
-            const produtoId = card.dataset.produtoId;
-            if (produtoId) {
-                card.addEventListener('click', (e) => {
+        // Adicionar event listeners para cada card
+        const cards = document.querySelectorAll('.produto-card');
+        console.log(`🎯 Encontrados ${cards.length} cards de produto`);
+        
+        cards.forEach(card => {
+            const produtoId = parseInt(card.dataset.produtoId);
+            const disponivel = card.style.opacity !== '0.6';
+            
+            if (disponivel && produtoId) {
+                // Remove listener antigo se existir
+                const newCard = card.cloneNode(true);
+                card.parentNode.replaceChild(newCard, card);
+                
+                newCard.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    console.log('🖱️ Clique no produto:', produtoId);
-                    this.adicionarAoCarrinho(parseInt(produtoId));
+                    console.log('🖱️ Clique no produto ID:', produtoId);
+                    this.adicionarAoCarrinho(produtoId);
                 });
+                
                 // Efeito hover
-                card.addEventListener('mouseenter', () => {
-                    if ((this.produtos.find(p => p.id == produtoId)?.quantidade || 0) > 0) {
-                        card.style.transform = 'scale(1.02)';
-                        card.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-                    }
+                newCard.addEventListener('mouseenter', () => {
+                    newCard.style.transform = 'translateY(-2px)';
+                    newCard.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
                 });
-                card.addEventListener('mouseleave', () => {
-                    card.style.transform = '';
-                    card.style.boxShadow = '';
+                newCard.addEventListener('mouseleave', () => {
+                    newCard.style.transform = '';
+                    newCard.style.boxShadow = '';
                 });
             }
         });
@@ -1638,15 +1724,26 @@ const Vendas = {
     
     escapeHtml(text) {
         if (!text) return '';
-        return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     },
     
     async buscarProdutos(termo) {
+        if (!termo || termo.length < 2) {
+            // Se busca vazia, recarrega todos
+            await this.carregarProdutos();
+            return;
+        }
+        
         try {
+            UI.showLoading();
             const data = await API.listarProdutos({ busca: termo, limit: 100 });
             this.renderizarProdutos(data.produtos || []);
         } catch (error) {
             console.error('Erro ao buscar produtos:', error);
+        } finally {
+            UI.hideLoading();
         }
     },
     
@@ -1663,29 +1760,32 @@ const Vendas = {
         
         if (!produto) {
             console.error('❌ Produto não encontrado! ID:', produtoId);
-            App.showNotification(`Produto ID ${produtoId} não encontrado!`, 'danger');
+            App.showNotification(`Produto não encontrado!`, 'danger');
             return;
         }
         
-        console.log('✅ Produto encontrado:', produto.nome);
+        console.log('✅ Produto encontrado:', produto.nome, 'Preço:', produto.preco_venda, 'Estoque:', produto.quantidade);
         
         if ((produto.quantidade || 0) <= 0) {
-            App.showNotification(`❌ Produto "${produto.nome}" sem estoque!`, 'warning');
+            App.showNotification(`❌ "${produto.nome}" - Sem estoque!`, 'warning');
             return;
         }
         
         if (!produto.preco_venda || produto.preco_venda <= 0) {
-            App.showNotification(`❌ Produto "${produto.nome}" sem preço de venda!`, 'danger');
+            App.showNotification(`❌ "${produto.nome}" - Preço não definido!`, 'danger');
             return;
         }
         
+        // Verificar se é clique com Shift
         const isShiftClick = window.event && window.event.shiftKey;
         
         if (isShiftClick) {
             const quantidade = prompt(`Quantidade de ${produto.nome}:`, '1');
             if (quantidade) {
                 const qtd = parseInt(quantidade);
-                if (!isNaN(qtd) && qtd > 0) this.adicionarMultiplo(produto, qtd);
+                if (!isNaN(qtd) && qtd > 0) {
+                    this.adicionarMultiplo(produto, qtd);
+                }
             }
             return;
         }
@@ -1694,7 +1794,7 @@ const Vendas = {
         
         if (itemExistente) {
             if (itemExistente.quantidade >= (produto.quantidade || 0)) {
-                App.showNotification('Quantidade máxima em estoque!', 'warning');
+                App.showNotification(`⚠️ Estoque insuficiente! Máximo: ${produto.quantidade}`, 'warning');
                 return;
             }
             itemExistente.quantidade++;
@@ -1713,11 +1813,14 @@ const Vendas = {
         
         this.atualizarCarrinho();
         
-        // Efeito visual
+        // Efeito visual no card clicado
         const card = document.querySelector(`.produto-card[data-produto-id="${produtoId}"]`);
         if (card) {
-            card.style.transform = 'scale(0.98)';
-            setTimeout(() => card.style.transform = '', 150);
+            card.style.transform = 'scale(0.97)';
+            card.style.transition = 'transform 0.1s ease';
+            setTimeout(() => {
+                if (card) card.style.transform = '';
+            }, 150);
         }
     },
     
@@ -1770,7 +1873,7 @@ const Vendas = {
         }
         
         if (quantidade > (produto?.quantidade || 0)) {
-            App.showNotification('Quantidade superior ao estoque!', 'warning');
+            App.showNotification(`⚠️ Estoque insuficiente! Máximo: ${produto?.quantidade || 0}`, 'warning');
             return;
         }
         
@@ -1779,11 +1882,15 @@ const Vendas = {
     },
     
     calcularTotais() {
-        let total = 0, lucro = 0;
+        let total = 0;
+        let lucro = 0;
+        
         this.carrinho.forEach(item => {
-            total += (item.preco || 0) * item.quantidade;
+            const subtotal = (item.preco || 0) * item.quantidade;
+            total += subtotal;
             lucro += ((item.preco || 0) - (item.preco_custo || 0)) * item.quantidade;
         });
+        
         return { total, lucro };
     },
     
@@ -1791,54 +1898,96 @@ const Vendas = {
         const container = document.getElementById('carrinhoItens');
         const totalElement = document.getElementById('carrinhoTotal');
         const lucroElement = document.getElementById('carrinhoLucro');
+        const qtdElement = document.getElementById('carrinhoQuantidade');
         
         if (!container) return;
         
         const { total, lucro } = this.calcularTotais();
+        const quantidadeTotal = this.carrinho.reduce((acc, item) => acc + item.quantidade, 0);
+        
+        // Atualizar badge de quantidade
+        if (qtdElement) {
+            qtdElement.textContent = quantidadeTotal;
+            qtdElement.style.display = quantidadeTotal > 0 ? 'inline-block' : 'none';
+        }
         
         if (this.carrinho.length === 0) {
-            container.innerHTML = `<div style="text-align: center; padding: 30px;"><div style="font-size: 48px;">🛒</div><h3>Carrinho vazio</h3><p style="color: var(--text-muted);">Clique nos produtos para adicionar</p><p style="color: var(--text-muted); font-size: 12px;">💡 Dica: Shift + clique para adicionar múltiplos</p></div>`;
+            container.innerHTML = `
+                <div style="text-align: center; padding: 40px 20px;">
+                    <div style="font-size: 48px; margin-bottom: 15px;">🛒</div>
+                    <h3 style="margin-bottom: 10px;">Carrinho vazio</h3>
+                    <p style="color: var(--text-muted);">Clique nos produtos para adicionar</p>
+                    <p style="color: var(--text-muted); font-size: 12px; margin-top: 10px;">
+                        💡 Dica: Shift + clique para adicionar múltiplos
+                    </p>
+                </div>
+            `;
         } else {
             container.innerHTML = this.carrinho.map((item, index) => `
-                <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 12px; margin-bottom: 10px;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                        <strong>${this.escapeHtml(item.nome)}</strong>
-                        <span>${UI.formatCurrency((item.preco || 0) * item.quantidade)}</span>
+                <div class="cart-item" style="background: var(--bg-tertiary); border-radius: 10px; padding: 12px; margin-bottom: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <strong style="font-size: 14px;">${this.escapeHtml(item.nome)}</strong>
+                        <span style="font-weight: bold; color: var(--accent-primary);">${UI.formatCurrency((item.preco || 0) * item.quantidade)}</span>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <div style="display: flex; align-items: center; gap: 5px;">
-                            <button onclick="Vendas.atualizarQuantidade(${index}, ${item.quantidade - 1})" 
-                                    style="width: 28px; height: 28px; border-radius: 6px; border: none; background: var(--bg-secondary); cursor: pointer;"
+                    
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button class="btn-quantity" onclick="Vendas.atualizarQuantidade(${index}, ${item.quantidade - 1})"
+                                    style="width: 30px; height: 30px; border-radius: 6px; border: none; background: var(--bg-secondary); cursor: pointer; font-size: 16px;"
                                     ${item.quantidade <= 1 ? 'disabled' : ''}>−</button>
-                            <input type="number" value="${item.quantidade}" min="1" max="${item.estoque || 999}" 
+                            
+                            <input type="number" class="quantity-input" value="${item.quantidade}" 
+                                   min="1" max="${item.estoque || 999}" 
                                    onchange="Vendas.atualizarQuantidade(${index}, this.value)"
-                                   style="width: 50px; text-align: center; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 5px;">
-                            <button onclick="Vendas.atualizarQuantidade(${index}, ${item.quantidade + 1})"
-                                    style="width: 28px; height: 28px; border-radius: 6px; border: none; background: var(--bg-secondary); cursor: pointer;"
+                                   style="width: 50px; text-align: center; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px;">
+                            
+                            <button class="btn-quantity" onclick="Vendas.atualizarQuantidade(${index}, ${item.quantidade + 1})"
+                                    style="width: 30px; height: 30px; border-radius: 6px; border: none; background: var(--bg-secondary); cursor: pointer; font-size: 16px;"
                                     ${item.quantidade >= (item.estoque || 999) ? 'disabled' : ''}>+</button>
                         </div>
-                        <button onclick="Vendas.removerDoCarrinho(${index})" 
-                                style="background: #ef4444; color: white; border: none; border-radius: 6px; padding: 5px 12px; cursor: pointer;">Remover</button>
+                        
+                        <button class="btn-remove" onclick="Vendas.removerDoCarrinho(${index})" 
+                                style="background: #ef4444; color: white; border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 12px;">
+                            Remover
+                        </button>
                     </div>
-                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 5px;">Unitário: ${UI.formatCurrency(item.preco)}</div>
+                    
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">
+                        Unitário: ${UI.formatCurrency(item.preco)} • Estoque: ${item.estoque}
+                    </div>
                 </div>
             `).join('');
         }
         
-        if (totalElement) totalElement.textContent = UI.formatCurrency(total);
+        if (totalElement) {
+            totalElement.textContent = UI.formatCurrency(total);
+        }
+        
         if (lucroElement) {
             if (Auth.isAdmin()) {
                 lucroElement.textContent = UI.formatCurrency(lucro);
-                lucroElement.parentElement.style.display = 'flex';
+                const lucroContainer = lucroElement.closest('.cart-total-item');
+                if (lucroContainer) lucroContainer.style.display = 'flex';
             } else {
-                lucroElement.parentElement.style.display = 'none';
+                const lucroContainer = lucroElement.closest('.cart-total-item');
+                if (lucroContainer) lucroContainer.style.display = 'none';
             }
+        }
+        
+        // Habilitar/desabilitar botão finalizar baseado no carrinho
+        const btnFinalizar = document.getElementById('btnFinalizarVenda');
+        if (btnFinalizar && !btnFinalizar.disabled) {
+            btnFinalizar.disabled = this.carrinho.length === 0;
         }
     },
     
     async finalizarVenda() {
-        const formaPagamento = document.getElementById('formaPagamento')?.value;
+        console.log('🎯 Finalizando venda...');
         
+        const formaPagamentoSelect = document.getElementById('formaPagamento');
+        const formaPagamento = formaPagamentoSelect?.value;
+        
+        // Validações
         if (this.carrinho.length === 0) {
             App.showNotification('Adicione itens ao carrinho!', 'warning');
             return;
@@ -1846,233 +1995,87 @@ const Vendas = {
         
         if (!formaPagamento) {
             App.showNotification('Selecione a forma de pagamento!', 'warning');
+            formaPagamentoSelect?.focus();
             return;
         }
         
         const { total } = this.calcularTotais();
         
-        if (!confirm(`Confirmar venda no valor de ${UI.formatCurrency(total)}?`)) return;
+        // Confirmar venda
+        const confirmado = confirm(
+            `📋 CONFIRMAR VENDA\n\n` +
+            `Itens: ${this.carrinho.reduce((acc, i) => acc + i.quantidade, 0)}\n` +
+            `Total: ${UI.formatCurrency(total)}\n` +
+            `Pagamento: ${formaPagamento}\n\n` +
+            `Confirmar esta venda?`
+        );
+        
+        if (!confirmado) return;
         
         try {
             UI.showLoading();
             
+            // Preparar dados da venda
             const venda = {
-                itens: this.carrinho.map(item => ({ produto_id: item.produto_id, quantidade: item.quantidade })),
+                itens: this.carrinho.map(item => ({
+                    produto_id: item.produto_id,
+                    quantidade: item.quantidade,
+                    preco_unitario: item.preco
+                })),
                 forma_pagamento: formaPagamento,
-                observacao: ''
+                observacao: '',
+                total: total
             };
+            
+            console.log('📝 Enviando venda:', venda);
             
             const result = await API.criarVenda(venda);
             
-            App.showNotification(`✅ Venda finalizada! Total: ${UI.formatCurrency(result.total)}`, 'success');
+            console.log('✅ Venda finalizada:', result);
             
-            this.carrinho = [];
-            this.atualizarCarrinho();
-            await this.carregarProdutos();
-            
-            const pagamentoSelect = document.getElementById('formaPagamento');
-            if (pagamentoSelect) pagamentoSelect.value = '';
-            this.formaPagamento = '';
-            
-        } catch (error) {
-            if (error.message.includes('Caixa fechado')) {
-                App.showNotification('❌ Caixa fechado! Não é possível realizar vendas.', 'danger');
-            } else {
-                App.showNotification('Erro ao finalizar venda: ' + error.message, 'danger');
-            }
-        } finally {
-            UI.hideLoading();
-        }
-    }
-};
-
-// ============================================
-// MÓDULO DE HISTÓRICO DE VENDAS
-// ============================================
-const HistoricoVendas = {
-    vendas: [],
-    paginaAtual: 1,
-    totalPaginas: 1,
-    filtros: { dataInicio: '', dataFim: '', busca: '' },
-    
-    async init() {
-        console.log('📜 Inicializando histórico de vendas...');
-        await Auth.checkAuth();
-        this.setupEventListeners();
-        await this.carregar();
-        console.log('✅ Histórico inicializado');
-    },
-    
-    setupEventListeners() {
-        const btnBuscar = document.getElementById('btnBuscar');
-        if (btnBuscar) btnBuscar.addEventListener('click', () => this.carregar());
-        
-        const btnLimpar = document.getElementById('btnLimparFiltros');
-        if (btnLimpar) btnLimpar.addEventListener('click', () => this.limparFiltros());
-        
-        const buscaInput = document.getElementById('buscaVenda');
-        if (buscaInput) buscaInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.carregar();
-        });
-    },
-    
-    limparFiltros() {
-        document.getElementById('dataInicio').value = '';
-        document.getElementById('dataFim').value = '';
-        document.getElementById('buscaVenda').value = '';
-        this.filtros = { dataInicio: '', dataFim: '', busca: '' };
-        this.paginaAtual = 1;
-        this.carregar();
-    },
-    
-    async carregar() {
-        try {
-            UI.showLoading();
-            
-            const params = { page: this.paginaAtual, limit: 20 };
-            
-            const dataInicio = document.getElementById('dataInicio')?.value;
-            const dataFim = document.getElementById('dataFim')?.value;
-            const busca = document.getElementById('buscaVenda')?.value;
-            
-            if (dataInicio) params.data_inicio = dataInicio;
-            if (dataFim) params.data_fim = dataFim;
-            if (busca) params.busca = busca;
-            
-            const response = await API.listarVendas(params);
-            this.vendas = response.vendas || [];
-            this.totalPaginas = response.totalPages || 1;
-            
-            this.renderizar();
-            this.renderizarPaginacao();
-            this.atualizarResumo();
-            
-        } catch (error) {
-            console.error('Erro ao carregar vendas:', error);
-            App.showNotification('Erro ao carregar histórico', 'danger');
-        } finally {
-            UI.hideLoading();
-        }
-    },
-    
-    renderizar() {
-        const tbody = document.getElementById('historicoVendasTable');
-        if (!tbody) return;
-        
-        if (this.vendas.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 50px;"><div style="font-size: 48px;">📭</div><h3>Nenhuma venda encontrada</h3><p style="color: var(--text-muted);">Ajuste os filtros ou realize novas vendas</p></td></tr>`;
-            return;
-        }
-        
-        tbody.innerHTML = this.vendas.map(v => `
-            <tr>
-                <td>#${v.id}</td>
-                <td>${UI.formatDateTime(v.data_venda)}</td>
-                <td>${v.cliente_nome || 'Consumidor'}</td>
-                <td>${v.itens?.length || 0} item(ns)</td>
-                <td>${UI.formatCurrency(v.total)}</td>
-                <td><span class="badge ${v.status === 'cancelada' ? 'badge-danger' : 'badge-success'}">${v.status || 'concluída'}</span></td>
-                <td>
-                    <button class="btn btn-primary btn-sm" onclick="HistoricoVendas.verDetalhes(${v.id})">Ver</button>
-                    ${v.status !== 'cancelada' ? `<button class="btn btn-danger btn-sm" onclick="HistoricoVendas.cancelar(${v.id})">Cancelar</button>` : ''}
-                </td>
-            </tr>
-        `).join('');
-    },
-    
-    renderizarPaginacao() {
-        const container = document.getElementById('paginacaoHistorico');
-        if (!container || this.totalPaginas <= 1) { if(container) container.innerHTML = ''; return; }
-        
-        let html = `<button onclick="HistoricoVendas.irParaPagina(${this.paginaAtual - 1})" ${this.paginaAtual === 1 ? 'disabled' : ''}>◀</button>`;
-        for (let i = 1; i <= this.totalPaginas; i++) {
-            if (i === 1 || i === this.totalPaginas || (i >= this.paginaAtual - 2 && i <= this.paginaAtual + 2)) {
-                html += `<button class="${i === this.paginaAtual ? 'active' : ''}" onclick="HistoricoVendas.irParaPagina(${i})">${i}</button>`;
-            } else if (i === this.paginaAtual - 3 || i === this.paginaAtual + 3) {
-                html += `<button disabled>...</button>`;
-            }
-        }
-        html += `<button onclick="HistoricoVendas.irParaPagina(${this.paginaAtual + 1})" ${this.paginaAtual === this.totalPaginas ? 'disabled' : ''}>▶</button>`;
-        container.innerHTML = html;
-    },
-    
-    irParaPagina(pagina) {
-        if (pagina < 1 || pagina > this.totalPaginas) return;
-        this.paginaAtual = pagina;
-        this.carregar();
-    },
-    
-    atualizarResumo() {
-        const totalVendas = this.vendas.reduce((acc, v) => acc + (v.total || 0), 0);
-        const totalLucro = this.vendas.reduce((acc, v) => acc + (v.lucro || 0), 0);
-        
-        const totalElement = document.getElementById('totalVendasPeriodo');
-        const lucroElement = document.getElementById('totalLucroPeriodo');
-        
-        if (totalElement) totalElement.textContent = UI.formatCurrency(totalVendas);
-        if (lucroElement && Auth.isAdmin()) lucroElement.textContent = UI.formatCurrency(totalLucro);
-    },
-    
-    async verDetalhes(id) {
-        try {
-            UI.showLoading();
-            const venda = await API.getVenda(id);
-            
-            const modal = document.getElementById('modalDetalhesVenda');
-            const content = document.getElementById('detalhesVendaContent');
-            
-            if (!modal || !content) return;
-            
-            content.innerHTML = `
-                <div style="margin-bottom: 20px;">
-                    <p><strong>ID:</strong> #${venda.id}</p>
-                    <p><strong>Data:</strong> ${UI.formatDateTime(venda.data_venda)}</p>
-                    <p><strong>Forma de Pagamento:</strong> ${venda.forma_pagamento || 'N/A'}</p>
-                    <p><strong>Status:</strong> <span class="badge ${venda.status === 'cancelada' ? 'badge-danger' : 'badge-success'}">${venda.status || 'concluída'}</span></p>
-                    <p><strong>Cliente:</strong> ${venda.cliente_nome || 'Consumidor'}</p>
-                    ${Auth.isAdmin() ? `<p><strong>Lucro:</strong> ${UI.formatCurrency(venda.lucro || 0)}</p>` : ''}
-                </div>
-                <h4>Itens da Venda</h4>
-                <table class="table" style="width: 100%;">
-                    <thead><tr><th>Produto</th><th>Qtd</th><th>Preço Unit.</th><th>Subtotal</th></tr></thead>
-                    <tbody>
-                        ${(venda.itens || []).map(item => `
-                            <tr>
-                                <td>${item.produto_nome || item.nome}</td>
-                                <td>${item.quantidade}</td>
-                                <td>${UI.formatCurrency(item.preco_unitario)}</td>
-                                <td>${UI.formatCurrency(item.subtotal)}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                    <tfoot><tr><td colspan="3"><strong>Total</strong></td><td><strong>${UI.formatCurrency(venda.total)}</strong></td></tr></tfoot>
-                </table>
+            // Mostrar comprovante
+            const comprovante = `
+                ✅ VENDA REALIZADA COM SUCESSO!
+                
+                Nº: #${result.id || 'N/A'}
+                Data: ${new Date().toLocaleString()}
+                Total: ${UI.formatCurrency(result.total || total)}
+                Pagamento: ${formaPagamento}
+                
+                Obrigado pela preferência!
             `;
             
-            modal.style.display = 'block';
+            App.showNotification(comprovante, 'success', 5000);
             
-            const closeBtn = modal.querySelector('.close');
-            if (closeBtn) closeBtn.onclick = () => modal.style.display = 'none';
+            // Limpar carrinho
+            this.carrinho = [];
+            this.atualizarCarrinho();
             
-            window.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
+            // Resetar forma de pagamento
+            if (formaPagamentoSelect) {
+                formaPagamentoSelect.value = '';
+            }
+            this.formaPagamento = '';
+            
+            // Recarregar produtos para atualizar estoque
+            await this.carregarProdutos();
+            
+            // Verificar caixa novamente
+            await this.verificarCaixa();
             
         } catch (error) {
-            App.showNotification('Erro ao carregar detalhes da venda', 'danger');
-        } finally {
-            UI.hideLoading();
-        }
-    },
-    
-    async cancelar(id) {
-        if (!confirm('⚠️ Tem certeza que deseja cancelar esta venda?')) return;
-        
-        try {
-            UI.showLoading();
-            await API.cancelarVenda(id);
-            App.showNotification('✅ Venda cancelada com sucesso!', 'success');
-            await this.carregar();
-        } catch (error) {
-            App.showNotification(error.message, 'danger');
+            console.error('❌ Erro ao finalizar venda:', error);
+            
+            let mensagem = 'Erro ao finalizar venda: ';
+            if (error.message.includes('Caixa fechado') || error.message.includes('caixa fechado')) {
+                mensagem = '❌ CAIXA FECHADO! Não é possível realizar vendas.';
+            } else if (error.message.includes('estoque')) {
+                mensagem = '❌ Estoque insuficiente! Recarregue a página e tente novamente.';
+            } else {
+                mensagem += error.message;
+            }
+            
+            App.showNotification(mensagem, 'danger');
         } finally {
             UI.hideLoading();
         }
@@ -2088,7 +2091,12 @@ const CategoriasManager = {
     
     async init() {
         await Auth.checkAuth();
-        if (!Auth.isAdmin()) { window.location.href = '/dashboard.html'; return; }
+        
+        if (!Auth.isAdmin()) {
+            window.location.href = '/dashboard.html';
+            return;
+        }
+        
         await this.carregarCategorias();
         await this.carregarTipos();
         this.setupEventListeners();
@@ -2096,16 +2104,32 @@ const CategoriasManager = {
     
     setupEventListeners() {
         const filtro = document.getElementById('filtroTipoCategoria');
-        if (filtro) filtro.addEventListener('change', () => this.carregarTipos());
+        if (filtro) {
+            filtro.addEventListener('change', () => {
+                this.carregarTipos();
+            });
+        }
         
         const formCategoria = document.getElementById('formCategoria');
-        if (formCategoria) formCategoria.addEventListener('submit', (e) => { e.preventDefault(); this.salvarCategoria(); });
+        if (formCategoria) {
+            formCategoria.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.salvarCategoria();
+            });
+        }
         
         const formTipo = document.getElementById('formTipo');
-        if (formTipo) formTipo.addEventListener('submit', (e) => { e.preventDefault(); this.salvarTipo(); });
+        if (formTipo) {
+            formTipo.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.salvarTipo();
+            });
+        }
         
         document.querySelectorAll('.close').forEach(btn => {
-            btn.addEventListener('click', () => document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'));
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+            });
         });
     },
     
@@ -2128,16 +2152,40 @@ const CategoriasManager = {
         if (!tbody) return;
         
         if (categorias.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 50px;"><div style="font-size: 48px;">🏷️</div><h3>Nenhuma categoria cadastrada</h3><button class="btn btn-primary" onclick="CategoriasManager.abrirModalCategoria()">Criar primeira categoria</button></td></tr>`;
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="4" style="text-align: center; padding: 50px;">
+                        <div style="font-size: 48px;">🏷️</div>
+                        <h3>Nenhuma categoria cadastrada</h3>
+                        <button class="btn btn-primary" onclick="CategoriasManager.abrirModalCategoria()">
+                            Criar primeira categoria
+                        </button>
+                    </td>
+                </tr>
+            `;
             return;
         }
         
         tbody.innerHTML = categorias.map(c => `
             <tr>
-                <td><span style="display: inline-block; width: 20px; height: 20px; background-color: ${c.cor || '#c4a747'}; border-radius: 4px; margin-right: 10px; vertical-align: middle;"></span>${c.nome || 'Sem nome'}</td>
-                <td><span class="badge ${c.tipo === 'bebida' ? 'badge-info' : c.tipo === 'come' ? 'badge-warning' : 'badge-secondary'}">${c.tipo || 'outro'}</span></td>
+                <td>
+                    <span style="display: inline-block; width: 20px; height: 20px; 
+                               background-color: ${c.cor || '#c4a747'}; border-radius: 4px; 
+                               margin-right: 10px; vertical-align: middle;"></span>
+                    ${c.nome || 'Sem nome'}
+                </td>
+                <td>
+                    <span class="badge ${c.tipo === 'bebida' ? 'badge-info' : 
+                                          c.tipo === 'come' ? 'badge-warning' : 'badge-secondary'}">
+                        ${c.tipo || 'outro'}
+                    </span>
+                </td>
                 <td>${c.total_produtos || 0}</td>
-                <td><button class="btn btn-primary btn-sm" onclick="CategoriasManager.editarCategoria(${c.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="CategoriasManager.excluirCategoria(${c.id})" ${c.total_produtos > 0 ? 'disabled' : ''}>🗑️</button></td>
+                <td>
+                    <button class="btn btn-primary btn-sm" onclick="CategoriasManager.editarCategoria(${c.id})">✏️</button>
+                    <button class="btn btn-danger btn-sm" onclick="CategoriasManager.excluirCategoria(${c.id})" 
+                            ${c.total_produtos > 0 ? 'disabled' : ''}>🗑️</button>
+                </td>
             </tr>
         `).join('');
     },
@@ -2145,17 +2193,31 @@ const CategoriasManager = {
     carregarSelectCategorias(categorias) {
         const select = document.getElementById('tipoCategoria');
         const filtro = document.getElementById('filtroTipoCategoria');
-        const options = categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
-        if (select) select.innerHTML = '<option value="">Selecione uma categoria</option>' + options;
-        if (filtro) filtro.innerHTML = '<option value="todas">Todas as categorias</option>' + options;
+        
+        const options = categorias.map(c => 
+            `<option value="${c.id}">${c.nome}</option>`
+        ).join('');
+        
+        if (select) {
+            select.innerHTML = '<option value="">Selecione uma categoria</option>' + options;
+        }
+        
+        if (filtro) {
+            filtro.innerHTML = '<option value="todas">Todas as categorias</option>' + options;
+        }
     },
     
     async carregarTipos() {
         try {
             const filtro = document.getElementById('filtroTipoCategoria')?.value;
             let tipos;
-            if (filtro && filtro !== 'todas') tipos = await API.listarTiposPorCategoria(filtro);
-            else tipos = await API.listarTipos();
+            
+            if (filtro && filtro !== 'todas') {
+                tipos = await API.listarTiposPorCategoria(filtro);
+            } else {
+                tipos = await API.listarTipos();
+            }
+            
             this.renderizarTipos(tipos || []);
         } catch (error) {
             console.error('Erro ao carregar tipos:', error);
@@ -2167,7 +2229,13 @@ const CategoriasManager = {
         if (!tbody) return;
         
         if (tipos.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 30px;">Nenhum tipo cadastrado</td></tr>`;
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="4" style="text-align: center; padding: 30px;">
+                        Nenhum tipo cadastrado
+                    </td>
+                </tr>
+            `;
             return;
         }
         
@@ -2176,16 +2244,23 @@ const CategoriasManager = {
                 <td>${t.nome || '-'}</td>
                 <td>${t.categoria_nome || '-'}</td>
                 <td>${t.total_produtos || 0}</td>
-                <td><button class="btn btn-primary btn-sm" onclick="CategoriasManager.editarTipo(${t.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="CategoriasManager.excluirTipo(${t.id})" ${t.total_produtos > 0 ? 'disabled' : ''}>🗑️</button></td>
+                <td>
+                    <button class="btn btn-primary btn-sm" onclick="CategoriasManager.editarTipo(${t.id})">✏️</button>
+                    <button class="btn btn-danger btn-sm" onclick="CategoriasManager.excluirTipo(${t.id})"
+                            ${t.total_produtos > 0 ? 'disabled' : ''}>🗑️</button>
+                </td>
             </tr>
         `).join('');
     },
     
     abrirModalCategoria(categoria = null) {
         this.categoriaEditando = categoria;
+        
         const modal = document.getElementById('modalCategoria');
         const titulo = document.getElementById('modalCategoriaTitulo');
+        
         if (!modal) return;
+        
         titulo.textContent = categoria ? '✏️ Editar Categoria' : '➕ Nova Categoria';
         
         if (categoria) {
@@ -2194,27 +2269,31 @@ const CategoriasManager = {
             document.getElementById('categoriaTipo').value = categoria.tipo || 'outro';
             document.getElementById('categoriaCor').value = categoria.cor || '#c4a747';
         } else {
-            document.getElementById('formCategoria')?.reset();
-            if(document.getElementById('categoriaCor')) document.getElementById('categoriaCor').value = '#c4a747';
+            document.getElementById('formCategoria').reset();
+            document.getElementById('categoriaCor').value = '#c4a747';
         }
+        
         modal.style.display = 'block';
     },
     
     async salvarCategoria() {
         try {
             UI.showLoading();
+            
             const nome = document.getElementById('categoriaNome')?.value?.trim();
             let tipo = document.getElementById('categoriaTipo')?.value;
+            
             if (!nome) throw new Error('Nome é obrigatório');
             if (!tipo) throw new Error('Tipo é obrigatório');
             
             if (tipo === 'outro') {
-                const novoTipo = prompt('Digite o tipo da categoria:');
+                const novoTipo = prompt('Digite o tipo da categoria (ex: cigarro, eletrônicos, etc):');
                 if (!novoTipo) throw new Error('Tipo é obrigatório');
                 tipo = novoTipo.toLowerCase().trim();
             }
             
             const cor = document.getElementById('categoriaCor')?.value || '#c4a747';
+            
             const categoria = { nome, tipo, cor };
             
             if (this.categoriaEditando) {
@@ -2228,7 +2307,9 @@ const CategoriasManager = {
             document.getElementById('modalCategoria').style.display = 'none';
             await this.carregarCategorias();
             await this.carregarTipos();
+            
         } catch (error) {
+            console.error('Erro ao salvar categoria:', error);
             App.showNotification(error.message, 'danger');
         } finally {
             UI.hideLoading();
@@ -2239,7 +2320,9 @@ const CategoriasManager = {
         try {
             const categorias = await API.listarCategorias();
             const categoria = categorias.find(c => c.id === id);
-            if (categoria) this.abrirModalCategoria(categoria);
+            if (categoria) {
+                this.abrirModalCategoria(categoria);
+            }
         } catch (error) {
             App.showNotification('Erro ao carregar categoria', 'danger');
         }
@@ -2247,6 +2330,7 @@ const CategoriasManager = {
     
     async excluirCategoria(id) {
         if (!confirm('⚠️ Tem certeza que deseja excluir esta categoria?')) return;
+        
         try {
             UI.showLoading();
             await API.excluirCategoria(id);
@@ -2262,9 +2346,12 @@ const CategoriasManager = {
     
     abrirModalTipo(tipo = null) {
         this.tipoEditando = tipo;
+        
         const modal = document.getElementById('modalTipo');
         const titulo = document.getElementById('modalTipoTitulo');
+        
         if (!modal) return;
+        
         titulo.textContent = tipo ? '✏️ Editar Tipo' : '➕ Novo Tipo';
         
         if (tipo) {
@@ -2272,16 +2359,19 @@ const CategoriasManager = {
             document.getElementById('tipoNome').value = tipo.nome || '';
             document.getElementById('tipoCategoria').value = tipo.categoria_id || '';
         } else {
-            document.getElementById('formTipo')?.reset();
+            document.getElementById('formTipo').reset();
         }
+        
         modal.style.display = 'block';
     },
     
     async salvarTipo() {
         try {
             UI.showLoading();
+            
             const nome = document.getElementById('tipoNome')?.value?.trim();
             const categoria_id = document.getElementById('tipoCategoria')?.value;
+            
             if (!nome) throw new Error('Nome é obrigatório');
             if (!categoria_id) throw new Error('Categoria é obrigatória');
             
@@ -2297,6 +2387,7 @@ const CategoriasManager = {
             
             document.getElementById('modalTipo').style.display = 'none';
             await this.carregarTipos();
+            
         } catch (error) {
             App.showNotification(error.message, 'danger');
         } finally {
@@ -2308,7 +2399,9 @@ const CategoriasManager = {
         try {
             const tipos = await API.listarTipos();
             const tipo = tipos.find(t => t.id === id);
-            if (tipo) this.abrirModalTipo(tipo);
+            if (tipo) {
+                this.abrirModalTipo(tipo);
+            }
         } catch (error) {
             App.showNotification('Erro ao carregar tipo', 'danger');
         }
@@ -2316,6 +2409,7 @@ const CategoriasManager = {
     
     async excluirTipo(id) {
         if (!confirm('⚠️ Tem certeza que deseja excluir este tipo?')) return;
+        
         try {
             UI.showLoading();
             await API.excluirTipo(id);
@@ -2330,34 +2424,46 @@ const CategoriasManager = {
 };
 
 // ============================================
-// MÓDULO DE RELATÓRIOS
+// MÓDULO DE RELATÓRIOS (APENAS ADMIN)
 // ============================================
 const Relatorios = {
     charts: {},
     
     async init() {
         await Auth.checkAuth();
-        if (!Auth.isAdmin()) { window.location.href = '/dashboard.html'; return; }
+        
+        if (!Auth.isAdmin()) {
+            window.location.href = '/dashboard.html';
+            return;
+        }
+        
         this.setupEventListeners();
         await this.carregar();
     },
     
     setupEventListeners() {
         const periodoSelect = document.getElementById('periodoRelatorio');
-        if (periodoSelect) periodoSelect.addEventListener('change', (e) => this.carregar(e.target.value));
+        if (periodoSelect) {
+            periodoSelect.addEventListener('change', (e) => {
+                this.carregar(e.target.value);
+            });
+        }
     },
     
     async carregar(periodo = 'mes') {
         try {
             UI.showLoading();
+            
             const [lucroDiario, lucroMensal, vendasPeriodo] = await Promise.all([
                 API.lucroDiario().catch(() => ({ total_lucro: 0 })),
                 API.lucroMensal().catch(() => ({ total_lucro: 0 })),
                 API.vendasPorPeriodo?.(periodo).catch(() => []) || []
             ]);
+            
             this.atualizarCards(lucroDiario, lucroMensal);
             this.atualizarTabela(vendasPeriodo || []);
             this.atualizarGrafico(vendasPeriodo || [], periodo);
+            
         } catch (error) {
             console.error('Erro ao carregar relatórios:', error);
             App.showNotification('Erro ao carregar relatórios', 'danger');
@@ -2369,531 +2475,99 @@ const Relatorios = {
     atualizarCards(lucroDiario, lucroMensal) {
         const hojeEl = document.getElementById('lucroDiarioValor');
         const mesEl = document.getElementById('lucroMensalValor');
-        if (hojeEl) hojeEl.textContent = UI.formatCurrency(lucroDiario?.total_lucro || 0);
-        if (mesEl) mesEl.textContent = UI.formatCurrency(lucroMensal?.total_lucro || 0);
+        
+        if (hojeEl) {
+            hojeEl.textContent = UI.formatCurrency(lucroDiario?.total_lucro || 0);
+        }
+        
+        if (mesEl) {
+            mesEl.textContent = UI.formatCurrency(lucroMensal?.total_lucro || 0);
+        }
     },
     
     atualizarTabela(vendas) {
         const tbody = document.getElementById('tabelaVendasPeriodo');
         if (!tbody) return;
-        if (!vendas?.length) { tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 30px;">Nenhuma venda encontrada</td></tr>'; return; }
+        
+        if (!vendas || vendas.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="4" style="text-align: center; padding: 30px;">
+                        Nenhuma venda encontrada
+                    </td>
+                </tr>
+            `;
+            return;
+        }
         
         tbody.innerHTML = vendas.map(v => `
-            <tr><td>${v.periodo || '-'}</td><td>${v.quantidade_vendas || 0}</td><td>${UI.formatCurrency(v.total_vendas || 0)}</td><td>${UI.formatCurrency(v.total_lucro || 0)}</td></tr>
+            <tr>
+                <td>${v.periodo || '-'}</td>
+                <td>${v.quantidade_vendas || 0}</td>
+                <td>${UI.formatCurrency(v.total_vendas || 0)}</td>
+                <td>${UI.formatCurrency(v.total_lucro || 0)}</td>
+            </tr>
         `).join('');
     },
     
     atualizarGrafico(vendas, periodo) {
         const ctx = document.getElementById('graficoRelatorio')?.getContext('2d');
         if (!ctx) return;
-        if (this.charts.relatorio) this.charts.relatorio.destroy();
-        if (!vendas?.length) return;
+        
+        if (this.charts.relatorio) {
+            this.charts.relatorio.destroy();
+        }
+        
+        if (!vendas || vendas.length === 0) {
+            ctx.font = '14px Arial';
+            ctx.fillStyle = '#94a3b8';
+            ctx.textAlign = 'center';
+            ctx.fillText('Sem dados para exibir', ctx.canvas.width/2, ctx.canvas.height/2);
+            return;
+        }
         
         this.charts.relatorio = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: vendas.map(v => v.periodo || ''),
                 datasets: [
-                    { label: 'Vendas (R$)', data: vendas.map(v => v.total_vendas || 0), backgroundColor: '#c4a747', borderRadius: 4 },
-                    { label: 'Lucro (R$)', data: vendas.map(v => v.total_lucro || 0), backgroundColor: '#b91c3c', borderRadius: 4 }
+                    {
+                        label: 'Vendas (R$)',
+                        data: vendas.map(v => v.total_vendas || 0),
+                        backgroundColor: '#c4a747',
+                        borderRadius: 4
+                    },
+                    {
+                        label: 'Lucro (R$)',
+                        data: vendas.map(v => v.total_lucro || 0),
+                        backgroundColor: '#b91c3c',
+                        borderRadius: 4
+                    }
                 ]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { labels: { color: '#94a3b8' } } },
+                plugins: {
+                    legend: {
+                        labels: { color: '#94a3b8' }
+                    }
+                },
                 scales: {
-                    y: { grid: { color: '#2d3540' }, ticks: { color: '#94a3b8', callback: (v) => 'R$ ' + v } },
-                    x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                    y: {
+                        grid: { color: '#2d3540' },
+                        ticks: {
+                            color: '#94a3b8',
+                            callback: (value) => 'R$ ' + value
+                        }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#94a3b8' }
+                    }
                 }
             }
         });
-    }
-};
-
-// Alias para compatibilidade
-const RelatoriosExternos = Relatorios;
-
-// ============================================
-// MÓDULO DE GASTOS (APENAS ADMIN)
-// ============================================
-const Gastos = {
-    gastos: [],
-    paginaAtual: 1,
-    totalPaginas: 1,
-    filtros: { dataInicio: '', dataFim: '', categoria: '' },
-    gastoEditando: null,
-    
-    async init() {
-        await Auth.checkAuth();
-        if (!Auth.isAdmin()) { window.location.href = '/dashboard.html'; return; }
-        this.setupEventListeners();
-        await this.carregar();
-    },
-    
-    setupEventListeners() {
-        const btnBuscar = document.getElementById('btnBuscarGastos');
-        if (btnBuscar) btnBuscar.addEventListener('click', () => this.carregar());
-        
-        const btnNovo = document.getElementById('btnNovoGasto');
-        if (btnNovo) btnNovo.addEventListener('click', () => this.abrirModal());
-        
-        const formGasto = document.getElementById('formGasto');
-        if (formGasto) formGasto.addEventListener('submit', (e) => { e.preventDefault(); this.salvar(); });
-        
-        const closeBtn = document.querySelector('#modalGasto .close');
-        if (closeBtn) closeBtn.addEventListener('click', () => this.fecharModal());
-    },
-    
-    async carregar() {
-        try {
-            UI.showLoading();
-            const params = { page: this.paginaAtual, limit: 20 };
-            
-            const dataInicio = document.getElementById('gastoDataInicio')?.value;
-            const dataFim = document.getElementById('gastoDataFim')?.value;
-            const categoria = document.getElementById('gastoCategoria')?.value;
-            
-            if (dataInicio) params.data_inicio = dataInicio;
-            if (dataFim) params.data_fim = dataFim;
-            if (categoria) params.categoria = categoria;
-            
-            const response = await API.listarGastos(params);
-            this.gastos = response.gastos || [];
-            this.totalPaginas = response.totalPages || 1;
-            
-            this.renderizar();
-            this.renderizarPaginacao();
-            this.atualizarResumo();
-        } catch (error) {
-            console.error('Erro ao carregar gastos:', error);
-            App.showNotification('Erro ao carregar gastos', 'danger');
-        } finally {
-            UI.hideLoading();
-        }
-    },
-    
-    renderizar() {
-        const tbody = document.getElementById('gastosTable');
-        if (!tbody) return;
-        
-        if (this.gastos.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 50px;"><div style="font-size: 48px;">💰</div><h3>Nenhum gasto registrado</h3><button class="btn btn-primary" onclick="Gastos.abrirModal()">Registrar primeiro gasto</button></td></tr>`;
-            return;
-        }
-        
-        tbody.innerHTML = this.gastos.map(g => `
-            <tr>
-                <td>${UI.formatDateTime(g.data_gasto)}</td>
-                <td>${g.descricao || '-'}</td>
-                <td>${g.categoria || 'Outros'}</td>
-                <td>${UI.formatCurrency(g.valor)}</td>
-                <td><span class="badge ${g.status === 'pago' ? 'badge-success' : 'badge-warning'}">${g.status || 'pendente'}</span></td>
-                <td>
-                    <button class="btn btn-primary btn-sm" onclick="Gastos.editar(${g.id})">✏️</button>
-                    <button class="btn btn-danger btn-sm" onclick="Gastos.excluir(${g.id})">🗑️</button>
-                 </td>
-            </tr>
-        `).join('');
-    },
-    
-    renderizarPaginacao() {
-        const container = document.getElementById('paginacaoGastos');
-        if (!container || this.totalPaginas <= 1) { if(container) container.innerHTML = ''; return; }
-        
-        let html = `<button onclick="Gastos.irParaPagina(${this.paginaAtual - 1})" ${this.paginaAtual === 1 ? 'disabled' : ''}>◀</button>`;
-        for (let i = 1; i <= this.totalPaginas; i++) {
-            if (i === 1 || i === this.totalPaginas || (i >= this.paginaAtual - 2 && i <= this.paginaAtual + 2)) {
-                html += `<button class="${i === this.paginaAtual ? 'active' : ''}" onclick="Gastos.irParaPagina(${i})">${i}</button>`;
-            } else if (i === this.paginaAtual - 3 || i === this.paginaAtual + 3) {
-                html += `<button disabled>...</button>`;
-            }
-        }
-        html += `<button onclick="Gastos.irParaPagina(${this.paginaAtual + 1})" ${this.paginaAtual === this.totalPaginas ? 'disabled' : ''}>▶</button>`;
-        container.innerHTML = html;
-    },
-    
-    irParaPagina(pagina) {
-        if (pagina < 1 || pagina > this.totalPaginas) return;
-        this.paginaAtual = pagina;
-        this.carregar();
-    },
-    
-    atualizarResumo() {
-        const totalGastos = this.gastos.reduce((acc, g) => acc + (g.valor || 0), 0);
-        const totalElement = document.getElementById('totalGastosPeriodo');
-        if (totalElement) totalElement.textContent = UI.formatCurrency(totalGastos);
-    },
-    
-    abrirModal(gasto = null) {
-        this.gastoEditando = gasto;
-        const modal = document.getElementById('modalGasto');
-        const titulo = document.getElementById('modalGastoTitulo');
-        if (!modal) return;
-        titulo.textContent = gasto ? '✏️ Editar Gasto' : '➕ Novo Gasto';
-        
-        if (gasto) {
-            document.getElementById('gastoId').value = gasto.id || '';
-            document.getElementById('gastoDescricao').value = gasto.descricao || '';
-            document.getElementById('gastoValor').value = gasto.valor || '';
-            document.getElementById('gastoData').value = gasto.data_gasto?.split('T')[0] || '';
-            document.getElementById('gastoCategoriaModal').value = gasto.categoria || '';
-            document.getElementById('gastoStatus').value = gasto.status || 'pendente';
-        } else {
-            document.getElementById('formGasto')?.reset();
-            document.getElementById('gastoData').value = new Date().toISOString().split('T')[0];
-        }
-        modal.style.display = 'block';
-    },
-    
-    fecharModal() {
-        const modal = document.getElementById('modalGasto');
-        if (modal) { modal.style.display = 'none'; this.gastoEditando = null; }
-    },
-    
-    async salvar() {
-        try {
-            UI.showLoading();
-            const gasto = {
-                descricao: document.getElementById('gastoDescricao')?.value,
-                valor: parseFloat(document.getElementById('gastoValor')?.value) || 0,
-                data_gasto: document.getElementById('gastoData')?.value,
-                categoria: document.getElementById('gastoCategoriaModal')?.value,
-                status: document.getElementById('gastoStatus')?.value
-            };
-            
-            if (!gasto.descricao) throw new Error('Descrição é obrigatória');
-            if (!gasto.valor || gasto.valor <= 0) throw new Error('Valor inválido');
-            if (!gasto.data_gasto) throw new Error('Data é obrigatória');
-            
-            if (this.gastoEditando) {
-                await API.atualizarGasto(this.gastoEditando.id, gasto);
-                App.showNotification('✅ Gasto atualizado!', 'success');
-            } else {
-                await API.criarGasto(gasto);
-                App.showNotification('✅ Gasto registrado!', 'success');
-            }
-            
-            this.fecharModal();
-            await this.carregar();
-        } catch (error) {
-            App.showNotification(error.message, 'danger');
-        } finally {
-            UI.hideLoading();
-        }
-    },
-    
-    async editar(id) {
-        const gasto = this.gastos.find(g => g.id === id);
-        if (gasto) this.abrirModal(gasto);
-    },
-    
-    async excluir(id) {
-        if (!confirm('⚠️ Tem certeza que deseja excluir este gasto?')) return;
-        try {
-            UI.showLoading();
-            await API.excluirGasto(id);
-            App.showNotification('✅ Gasto excluído!', 'success');
-            await this.carregar();
-        } catch (error) {
-            App.showNotification(error.message, 'danger');
-        } finally {
-            UI.hideLoading();
-        }
-    }
-};
-
-// ============================================
-// MÓDULO DE FINANCEIRO (APENAS ADMIN)
-// ============================================
-const Financeiro = {
-    async init() {
-        await Auth.checkAuth();
-        if (!Auth.isAdmin()) { window.location.href = '/dashboard.html'; return; }
-        await this.carregar();
-    },
-    
-    async carregar() {
-        try {
-            UI.showLoading();
-            
-            const hoje = new Date().toISOString().split('T')[0];
-            const primeiroDiaMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
-            
-            const [vendasMes, vendasHoje, gastosMes, gastosHoje] = await Promise.all([
-                API.listarVendas({ data_inicio: primeiroDiaMes, limite: 1000 }),
-                API.listarVendas({ data_inicio: hoje, data_fim: hoje, limite: 100 }),
-                API.listarGastos({ data_inicio: primeiroDiaMes, limite: 1000 }),
-                API.listarGastos({ data_inicio: hoje, data_fim: hoje, limite: 100 })
-            ]);
-            
-            const totalVendasMes = (vendasMes.vendas || []).reduce((acc, v) => acc + (v.total || 0), 0);
-            const totalVendasHoje = (vendasHoje.vendas || []).reduce((acc, v) => acc + (v.total || 0), 0);
-            const totalGastosMes = (gastosMes.gastos || []).reduce((acc, g) => acc + (g.valor || 0), 0);
-            const totalGastosHoje = (gastosHoje.gastos || []).reduce((acc, g) => acc + (g.valor || 0), 0);
-            
-            const lucroMes = totalVendasMes - totalGastosMes;
-            const lucroHoje = totalVendasHoje - totalGastosHoje;
-            
-            const elementos = {
-                vendasHoje: document.getElementById('finVendasHoje'),
-                gastosHoje: document.getElementById('finGastosHoje'),
-                lucroHoje: document.getElementById('finLucroHoje'),
-                vendasMes: document.getElementById('finVendasMes'),
-                gastosMes: document.getElementById('finGastosMes'),
-                lucroMes: document.getElementById('finLucroMes')
-            };
-            
-            if (elementos.vendasHoje) elementos.vendasHoje.textContent = UI.formatCurrency(totalVendasHoje);
-            if (elementos.gastosHoje) elementos.gastosHoje.textContent = UI.formatCurrency(totalGastosHoje);
-            if (elementos.lucroHoje) {
-                elementos.lucroHoje.textContent = UI.formatCurrency(lucroHoje);
-                elementos.lucroHoje.style.color = lucroHoje >= 0 ? '#10b981' : '#ef4444';
-            }
-            if (elementos.vendasMes) elementos.vendasMes.textContent = UI.formatCurrency(totalVendasMes);
-            if (elementos.gastosMes) elementos.gastosMes.textContent = UI.formatCurrency(totalGastosMes);
-            if (elementos.lucroMes) {
-                elementos.lucroMes.textContent = UI.formatCurrency(lucroMes);
-                elementos.lucroMes.style.color = lucroMes >= 0 ? '#10b981' : '#ef4444';
-            }
-            
-        } catch (error) {
-            console.error('Erro ao carregar financeiro:', error);
-            App.showNotification('Erro ao carregar dados financeiros', 'danger');
-        } finally {
-            UI.hideLoading();
-        }
-    }
-};
-
-// ============================================
-// MÓDULO DE CAIXA
-// ============================================
-const Caixa = {
-    status: null,
-    refreshInterval: null,
-    
-    async init() {
-        await Auth.checkAuth();
-        this.setupEventListeners();
-        await this.carregarStatus();
-        await this.carregarMovimentacoes();
-        this.configurarAtualizacao();
-    },
-    
-    setupEventListeners() {
-        const btnAbrir = document.getElementById('btnAbrirCaixa');
-        if (btnAbrir) btnAbrir.addEventListener('click', () => this.abrirCaixa());
-        
-        const btnFechar = document.getElementById('btnFecharCaixa');
-        if (btnFechar) btnFechar.addEventListener('click', () => this.fecharCaixa());
-        
-        const btnSangria = document.getElementById('btnSangria');
-        if (btnSangria) btnSangria.addEventListener('click', () => this.registrarSangria());
-        
-        const btnSuprimento = document.getElementById('btnSuprimento');
-        if (btnSuprimento) btnSuprimento.addEventListener('click', () => this.registrarSuprimento());
-    },
-    
-    async carregarStatus() {
-        try {
-            const status = await API.statusCaixa();
-            this.status = status;
-            this.atualizarUI();
-        } catch (error) {
-            console.error('Erro ao carregar status do caixa:', error);
-        }
-    },
-    
-    atualizarUI() {
-        const statusDiv = document.getElementById('caixaStatus');
-        const infoDiv = document.getElementById('caixaInfo');
-        const botoes = {
-            abrir: document.getElementById('btnAbrirCaixa'),
-            fechar: document.getElementById('btnFecharCaixa'),
-            sangria: document.getElementById('btnSangria'),
-            suprimento: document.getElementById('btnSuprimento')
-        };
-        
-        if (this.status?.aberto) {
-            if (statusDiv) {
-                statusDiv.innerHTML = '<span class="badge badge-success">🟢 CAIXA ABERTO</span>';
-                statusDiv.style.color = '#10b981';
-            }
-            if (infoDiv && this.status.caixa_atual) {
-                infoDiv.innerHTML = `
-                    <p><strong>Aberto por:</strong> ${this.status.caixa_atual.usuario_nome || this.status.caixa_atual.usuario_id}</p>
-                    <p><strong>Aberto em:</strong> ${UI.formatDateTime(this.status.caixa_atual.data_abertura)}</p>
-                    <p><strong>Saldo inicial:</strong> ${UI.formatCurrency(this.status.caixa_atual.saldo_inicial)}</p>
-                    <p><strong>Saldo atual:</strong> ${UI.formatCurrency(this.status.caixa_atual.saldo_atual)}</p>
-                `;
-            }
-            if (botoes.abrir) botoes.abrir.style.display = 'none';
-            if (botoes.fechar) botoes.fechar.style.display = 'inline-block';
-            if (botoes.sangria) botoes.sangria.style.display = 'inline-block';
-            if (botoes.suprimento) botoes.suprimento.style.display = 'inline-block';
-        } else {
-            if (statusDiv) {
-                statusDiv.innerHTML = '<span class="badge badge-danger">🔴 CAIXA FECHADO</span>';
-                statusDiv.style.color = '#ef4444';
-            }
-            if (infoDiv) infoDiv.innerHTML = '<p>Caixa está fechado. Abra o caixa para começar a vender.</p>';
-            if (botoes.abrir) botoes.abrir.style.display = 'inline-block';
-            if (botoes.fechar) botoes.fechar.style.display = 'none';
-            if (botoes.sangria) botoes.sangria.style.display = 'none';
-            if (botoes.suprimento) botoes.suprimento.style.display = 'none';
-        }
-    },
-    
-    async abrirCaixa() {
-        const saldoInicial = prompt('Digite o saldo inicial do caixa:', '0');
-        if (saldoInicial === null) return;
-        
-        const valor = parseFloat(saldoInicial);
-        if (isNaN(valor)) {
-            App.showNotification('Valor inválido', 'danger');
-            return;
-        }
-        
-        try {
-            UI.showLoading();
-            await API.abrirCaixa({ saldo_inicial: valor });
-            App.showNotification('✅ Caixa aberto com sucesso!', 'success');
-            await this.carregarStatus();
-            await this.carregarMovimentacoes();
-        } catch (error) {
-            App.showNotification(error.message, 'danger');
-        } finally {
-            UI.hideLoading();
-        }
-    },
-    
-    async fecharCaixa() {
-        if (!confirm('⚠️ Tem certeza que deseja fechar o caixa? Esta ação não pode ser desfeita.')) return;
-        
-        try {
-            UI.showLoading();
-            await API.fecharCaixa({});
-            App.showNotification('✅ Caixa fechado com sucesso!', 'success');
-            await this.carregarStatus();
-            await this.carregarMovimentacoes();
-        } catch (error) {
-            App.showNotification(error.message, 'danger');
-        } finally {
-            UI.hideLoading();
-        }
-    },
-    
-    async registrarSangria() {
-        const valor = prompt('Digite o valor da sangria (retirada):', '0');
-        if (valor === null) return;
-        
-        const valorNum = parseFloat(valor);
-        if (isNaN(valorNum) || valorNum <= 0) {
-            App.showNotification('Valor inválido', 'danger');
-            return;
-        }
-        
-        const motivo = prompt('Motivo da sangria:', '');
-        
-        try {
-            UI.showLoading();
-            await API.registrarMovimentacao({
-                tipo: 'sangria',
-                valor: valorNum,
-                motivo: motivo || 'Sangria manual'
-            });
-            App.showNotification('✅ Sangria registrada!', 'success');
-            await this.carregarStatus();
-            await this.carregarMovimentacoes();
-        } catch (error) {
-            App.showNotification(error.message, 'danger');
-        } finally {
-            UI.hideLoading();
-        }
-    },
-    
-    async registrarSuprimento() {
-        const valor = prompt('Digite o valor do suprimento (adição):', '0');
-        if (valor === null) return;
-        
-        const valorNum = parseFloat(valor);
-        if (isNaN(valorNum) || valorNum <= 0) {
-            App.showNotification('Valor inválido', 'danger');
-            return;
-        }
-        
-        const motivo = prompt('Motivo do suprimento:', '');
-        
-        try {
-            UI.showLoading();
-            await API.registrarMovimentacao({
-                tipo: 'suprimento',
-                valor: valorNum,
-                motivo: motivo || 'Suprimento manual'
-            });
-            App.showNotification('✅ Suprimento registrado!', 'success');
-            await this.carregarStatus();
-            await this.carregarMovimentacoes();
-        } catch (error) {
-            App.showNotification(error.message, 'danger');
-        } finally {
-            UI.hideLoading();
-        }
-    },
-    
-    async carregarMovimentacoes() {
-        try {
-            const movimentacoes = await API.getMovimentacoes({ limite: 50 });
-            this.renderizarMovimentacoes(movimentacoes.movimentacoes || []);
-        } catch (error) {
-            console.error('Erro ao carregar movimentações:', error);
-        }
-    },
-    
-    renderizarMovimentacoes(movimentacoes) {
-        const tbody = document.getElementById('movimentacoesTable');
-        if (!tbody) return;
-        
-        if (movimentacoes.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 30px;">Nenhuma movimentação registrada</td></tr>';
-            return;
-        }
-        
-        tbody.innerHTML = movimentacoes.map(m => `
-            <tr>
-                <td>${UI.formatDateTime(m.data_movimento)}</td>
-                <td><span class="badge ${m.tipo === 'venda' ? 'badge-success' : m.tipo === 'sangria' ? 'badge-danger' : 'badge-info'}">${m.tipo}</span></td>
-                <td>${m.descricao || '-'}</td>
-                <td>${m.tipo === 'sangria' ? '-' : '+'} ${UI.formatCurrency(Math.abs(m.valor))}</td>
-                <td>${UI.formatCurrency(m.saldo_apos)}</td>
-            </tr>
-        `).join('');
-    },
-    
-    configurarAtualizacao() {
-        if (this.refreshInterval) clearInterval(this.refreshInterval);
-        this.refreshInterval = setInterval(() => {
-            if (document.visibilityState === 'visible') {
-                this.carregarStatus();
-                this.carregarMovimentacoes();
-            }
-        }, 30000);
-    }
-};
-
-// ============================================
-// DASHBOARD FALLBACK
-// ============================================
-const Dashboard = {
-    async init() {
-        const user = Auth.getCurrentUser();
-        if (user && user.role === 'admin') {
-            if (window.DashboardAdmin) await DashboardAdmin.init();
-            else window.location.href = '/vendas.html';
-        } else {
-            window.location.href = '/vendas.html';
-        }
     }
 };
 
@@ -2903,23 +2577,30 @@ const Dashboard = {
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
-        const later = () => { clearTimeout(timeout); func(...args); };
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
     };
 }
 
 // ============================================
-// INICIALIZAÇÃO
+// INICIALIZAÇÃO - APENAS UMA VEZ
 // ============================================
 let appInitialized = false;
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (appInitialized) return;
+    if (appInitialized) {
+        console.log('⚠️ App já foi inicializado, ignorando DOMContentLoaded');
+        return;
+    }
     appInitialized = true;
     App.init();
 });
 
+// Se o documento já estiver carregado
 if (document.readyState === 'complete' || document.readyState === 'interactive') {
     if (!appInitialized) {
         appInitialized = true;
@@ -2931,19 +2612,11 @@ if (document.readyState === 'complete' || document.readyState === 'interactive')
 window.App = App;
 window.Auth = Auth;
 window.UI = UI;
-window.API = API;
 window.Dashboard = Dashboard;
 window.DashboardAdmin = DashboardAdmin;
 window.Produtos = Produtos;
 window.Vendas = Vendas;
-window.HistoricoVendas = HistoricoVendas;
 window.CategoriasManager = CategoriasManager;
 window.Relatorios = Relatorios;
-window.RelatoriosExternos = RelatoriosExternos;
-window.Gastos = Gastos;
-window.Financeiro = Financeiro;
-window.Caixa = Caixa;
-
-console.log('🍷 PodPá v2.1.0 - Todos os módulos carregados!');
 
 } // Fim do if (typeof window.App === 'undefined')
