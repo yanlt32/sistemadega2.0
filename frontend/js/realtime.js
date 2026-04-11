@@ -1,14 +1,29 @@
 // ============================================
 // SISTEMA DE NOTIFICAÇÕES E ATUALIZAÇÃO EM TEMPO REAL
+// VERSÃO CORRIGIDA - SEM LOOP INFINITO
 // ============================================
 
 // Sistema de notificações bonitas
 const Notificacao = {
+    _ultimaNotificacao: 0,
+    _filaNotificacoes: [],
+    
     mostrar(mensagem, tipo = 'info', duracao = 3000) {
+        // Limitar taxa de notificações (máximo 1 a cada 2 segundos)
+        const agora = Date.now();
+        if (agora - this._ultimaNotificacao < 2000) {
+            // Adicionar à fila para mostrar depois
+            this._filaNotificacoes.push({ mensagem, tipo, duracao });
+            setTimeout(() => this._processarFila(), 2000);
+            return;
+        }
+        
+        this._ultimaNotificacao = agora;
+        
         // Remover notificações antigas se houver muitas
         const notificacoesExistentes = document.querySelectorAll('.toast-notification');
         if (notificacoesExistentes.length > 3) {
-            notificacoesExistentes[0].remove();
+            notificacoesExistentes[0]?.remove();
         }
         
         // Criar elemento de notificação
@@ -33,9 +48,18 @@ const Notificacao = {
         
         // Remover após duração
         setTimeout(() => {
-            toast.style.animation = 'slideOut 0.3s ease';
-            setTimeout(() => toast.remove(), 300);
+            if (toast && toast.parentNode) {
+                toast.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }
         }, duracao);
+    },
+    
+    _processarFila() {
+        if (this._filaNotificacoes.length > 0) {
+            const next = this._filaNotificacoes.shift();
+            this.mostrar(next.mensagem, next.tipo, next.duracao);
+        }
     }
 };
 
@@ -43,26 +67,51 @@ const Notificacao = {
 const Realtime = {
     socket: null,
     connected: false,
+    _initialized: false,
+    _fallbackInterval: null,
+    _ultimaAtualizacao: {},
     
     init() {
+        // Evitar múltiplas inicializações
+        if (this._initialized) {
+            console.log('⚠️ Realtime já inicializado, ignorando...');
+            return;
+        }
+        
+        this._initialized = true;
         this.conectar();
         this.configurarListeners();
         this.adicionarEstilos();
+    },
+    
+    destroy() {
+        if (this._fallbackInterval) {
+            clearInterval(this._fallbackInterval);
+            this._fallbackInterval = null;
+        }
+        if (this.socket) {
+            this.socket.disconnect();
+            this.socket = null;
+        }
+        this._initialized = false;
+        this.connected = false;
     },
     
     conectar() {
         try {
             // Verificar se o Socket.IO está disponível
             if (typeof io === 'undefined') {
-                console.log('⚠️ Socket.IO não disponível, usando fallback');
+                console.log('⚠️ Socket.IO não disponível, usando fallback (polling a cada 60s)');
                 this.connected = false;
                 
-                // Fallback: usar polling simples a cada 30 segundos
-                setInterval(() => {
-                    if (document.visibilityState === 'visible') {
-                        this.atualizarPaginas(['dashboard', 'produtos', 'vendas', 'historico']);
-                    }
-                }, 30000);
+                // Fallback: usar polling simples a cada 60 segundos (menos frequente)
+                if (!this._fallbackInterval) {
+                    this._fallbackInterval = setInterval(() => {
+                        if (document.visibilityState === 'visible') {
+                            this.atualizarPaginasAtuais();
+                        }
+                    }, 60000); // 60 segundos
+                }
                 return;
             }
             
@@ -76,80 +125,102 @@ const Realtime = {
             this.socket = io(serverUrl, {
                 reconnection: true,
                 reconnectionAttempts: 5,
-                reconnectionDelay: 1000,
-                transports: ['polling', 'websocket'] // Fallback para polling
+                reconnectionDelay: 2000,
+                reconnectionDelayMax: 10000,
+                timeout: 10000,
+                transports: ['polling', 'websocket']
             });
             
             this.socket.on('connect', () => {
-                console.log('🟢 Conectado ao servidor');
+                console.log('🟢 Conectado ao servidor WebSocket');
                 this.connected = true;
-                Notificacao.mostrar('🟢 Conectado ao servidor', 'success', 2000);
+                // Não mostrar notificação de conexão para não poluir
+                // Notificacao.mostrar('🟢 Conectado ao servidor', 'success', 2000);
             });
             
             this.socket.on('disconnect', () => {
-                console.log('🔴 Desconectado do servidor');
+                console.log('🔴 Desconectado do servidor WebSocket');
                 this.connected = false;
-                Notificacao.mostrar('🔴 Desconectado. Reconectando...', 'warning', 3000);
             });
             
             this.socket.on('connect_error', (error) => {
-                console.log('⚠️ Erro na conexão:', error);
+                console.log('⚠️ Erro na conexão WebSocket:', error?.message || error);
                 this.connected = false;
             });
             
             // ===== EVENTOS DE PRODUTO =====
             this.socket.on('produto:criado', (data) => {
-                Notificacao.mostrar(data.mensagem || '✅ Produto criado!', 'success');
+                if (data && data.mensagem) {
+                    Notificacao.mostrar(data.mensagem, 'success');
+                }
                 this.atualizarPaginas(['produtos', 'vendas']);
             });
             
             this.socket.on('produto:atualizado', (data) => {
-                Notificacao.mostrar(data.mensagem || '✏️ Produto atualizado!', 'info');
+                if (data && data.mensagem) {
+                    Notificacao.mostrar(data.mensagem, 'info');
+                }
                 this.atualizarPaginas(['produtos', 'vendas']);
             });
             
             this.socket.on('produto:excluido', (data) => {
-                Notificacao.mostrar(data.mensagem || '🗑️ Produto excluído!', 'warning');
+                if (data && data.mensagem) {
+                    Notificacao.mostrar(data.mensagem, 'warning');
+                }
                 this.atualizarPaginas(['produtos', 'vendas']);
             });
             
             // ===== EVENTOS DE ESTOQUE =====
             this.socket.on('estoque:atualizado', (data) => {
-                Notificacao.mostrar(data.mensagem || '📦 Estoque atualizado!', 'info');
+                if (data && data.mensagem) {
+                    Notificacao.mostrar(data.mensagem, 'info');
+                }
                 this.atualizarPaginas(['produtos', 'dashboard']);
             });
             
             // ===== EVENTOS DE VENDA =====
             this.socket.on('venda:realizada', (data) => {
-                Notificacao.mostrar(data.mensagem || '💰 Venda realizada com sucesso!', 'success');
+                if (data && data.mensagem) {
+                    Notificacao.mostrar(data.mensagem, 'success');
+                }
                 this.atualizarPaginas(['vendas', 'historico', 'dashboard', 'relatorios']);
             });
             
             this.socket.on('venda:excluida', (data) => {
-                Notificacao.mostrar(data.mensagem || '🗑️ Venda excluída!', 'warning');
+                if (data && data.mensagem) {
+                    Notificacao.mostrar(data.mensagem, 'warning');
+                }
                 this.atualizarPaginas(['historico', 'dashboard', 'relatorios']);
             });
             
             // ===== EVENTOS DE CATEGORIA =====
             this.socket.on('categoria:criada', (data) => {
-                Notificacao.mostrar(data.mensagem || '🏷️ Categoria criada!', 'success');
+                if (data && data.mensagem) {
+                    Notificacao.mostrar(data.mensagem, 'success');
+                }
                 this.atualizarPaginas(['categorias', 'produtos']);
             });
             
             this.socket.on('categoria:excluida', (data) => {
-                Notificacao.mostrar(data.mensagem || '🗑️ Categoria excluída!', 'warning');
+                if (data && data.mensagem) {
+                    Notificacao.mostrar(data.mensagem, 'warning');
+                }
                 this.atualizarPaginas(['categorias', 'produtos']);
             });
             
             // ===== EVENTOS DE CAIXA =====
             this.socket.on('caixa:aberto', (data) => {
-                Notificacao.mostrar(data.mensagem || '🔓 Caixa aberto!', 'success');
-                this.atualizarPaginas(['dashboard']);
+                if (data && data.mensagem) {
+                    Notificacao.mostrar(data.mensagem, 'success');
+                }
+                this.atualizarPaginas(['dashboard', 'caixa']);
             });
             
             this.socket.on('caixa:fechado', (data) => {
-                Notificacao.mostrar(data.mensagem || '🔒 Caixa fechado!', 'info');
-                this.atualizarPaginas(['dashboard', 'relatorios']);
+                if (data && data.mensagem) {
+                    Notificacao.mostrar(data.mensagem, 'info');
+                }
+                this.atualizarPaginas(['dashboard', 'caixa', 'relatorios']);
             });
             
         } catch (error) {
@@ -157,11 +228,13 @@ const Realtime = {
             this.connected = false;
             
             // Fallback em caso de erro
-            setInterval(() => {
-                if (document.visibilityState === 'visible') {
-                    this.atualizarPaginas(['dashboard', 'produtos', 'vendas', 'historico']);
-                }
-            }, 30000);
+            if (!this._fallbackInterval) {
+                this._fallbackInterval = setInterval(() => {
+                    if (document.visibilityState === 'visible') {
+                        this.atualizarPaginasAtuais();
+                    }
+                }, 60000);
+            }
         }
     },
     
@@ -174,54 +247,90 @@ const Realtime = {
         });
     },
     
+    atualizarPaginasAtuais() {
+        const path = window.location.pathname;
+        const paginasParaAtualizar = [];
+        
+        if (path.includes('dashboard.html')) paginasParaAtualizar.push('dashboard');
+        if (path.includes('produtos.html')) paginasParaAtualizar.push('produtos');
+        if (path.includes('vendas.html')) paginasParaAtualizar.push('vendas');
+        if (path.includes('historico-vendas.html')) paginasParaAtualizar.push('historico');
+        if (path.includes('categorias.html')) paginasParaAtualizar.push('categorias');
+        if (path.includes('relatorios.html')) paginasParaAtualizar.push('relatorios');
+        if (path.includes('caixa.html')) paginasParaAtualizar.push('caixa');
+        
+        if (paginasParaAtualizar.length > 0) {
+            this.atualizarPaginas(paginasParaAtualizar);
+        }
+    },
+    
     atualizarPaginas(paginas) {
         const path = window.location.pathname;
+        const agora = Date.now();
         
         paginas.forEach(pagina => {
+            // Limitar taxa de atualização por página (máximo 1 a cada 30 segundos)
+            const ultimaAtualizacao = this._ultimaAtualizacao[pagina] || 0;
+            if (agora - ultimaAtualizacao < 30000) {
+                return; // Muito recente, pular
+            }
+            
             try {
                 switch(pagina) {
                     case 'dashboard':
                         if (path.includes('dashboard.html')) {
-                            if (window.DashboardAdmin) {
-                                DashboardAdmin.carregarDados?.();
-                            } else if (window.Dashboard) {
-                                Dashboard.loadData?.(true);
-                            } else if (window.DashboardFuncionario) {
-                                DashboardFuncionario.carregarDados?.();
+                            if (window.DashboardAdmin && !window.DashboardAdmin.loading) {
+                                this._ultimaAtualizacao[pagina] = agora;
+                                window.DashboardAdmin.carregarDados?.();
+                            } else if (window.Dashboard && !window.Dashboard.loading) {
+                                this._ultimaAtualizacao[pagina] = agora;
+                                window.Dashboard.loadData?.();
                             }
                         }
                         break;
                         
                     case 'produtos':
-                        if (path.includes('produtos.html') && window.Produtos) {
-                            Produtos.carregar?.(true);
+                        if (path.includes('produtos.html') && window.Produtos && !window.Produtos.loading) {
+                            this._ultimaAtualizacao[pagina] = agora;
+                            window.Produtos.carregar?.();
                         }
                         break;
                         
                     case 'vendas':
-                        if (path.includes('vendas.html') && window.Vendas) {
-                            Vendas.carregarProdutos?.(true);
+                        if (path.includes('vendas.html') && window.Vendas && !window.Vendas.loading) {
+                            this._ultimaAtualizacao[pagina] = agora;
+                            window.Vendas.carregarProdutos?.();
                         }
                         break;
                         
                     case 'historico':
                         if (path.includes('historico-vendas.html') && window.HistoricoVendas) {
-                            if (typeof HistoricoVendas.carregar === 'function') {
-                                HistoricoVendas.carregar();
+                            this._ultimaAtualizacao[pagina] = agora;
+                            if (typeof window.HistoricoVendas.carregar === 'function') {
+                                window.HistoricoVendas.carregar();
                             }
                         }
                         break;
                         
                     case 'categorias':
                         if (path.includes('categorias.html') && window.CategoriasManager) {
-                            CategoriasManager.carregarCategorias?.();
-                            CategoriasManager.carregarTipos?.();
+                            this._ultimaAtualizacao[pagina] = agora;
+                            window.CategoriasManager.carregarCategorias?.();
+                            window.CategoriasManager.carregarTipos?.();
                         }
                         break;
                         
                     case 'relatorios':
                         if (path.includes('relatorios.html') && window.Relatorios) {
-                            Relatorios.carregar?.();
+                            this._ultimaAtualizacao[pagina] = agora;
+                            window.Relatorios.carregar?.();
+                        }
+                        break;
+                        
+                    case 'caixa':
+                        if (path.includes('caixa.html') && window.Caixa) {
+                            this._ultimaAtualizacao[pagina] = agora;
+                            window.Caixa.carregarDados?.();
                         }
                         break;
                 }
@@ -327,7 +436,6 @@ const Realtime = {
                 to { width: 0%; }
             }
             
-            /* Melhorias nos modais */
             .modal {
                 animation: fadeIn 0.2s ease;
             }
@@ -353,7 +461,6 @@ const Realtime = {
                 }
             }
             
-            /* Loading spinner melhorado */
             .spinner-container {
                 backdrop-filter: blur(5px);
                 background: rgba(0,0,0,0.7);
@@ -373,7 +480,6 @@ const Realtime = {
                 to { transform: rotate(360deg); }
             }
             
-            /* Scrollbar personalizada */
             ::-webkit-scrollbar {
                 width: 8px;
                 height: 8px;
@@ -396,25 +502,37 @@ const Realtime = {
     }
 };
 
-// Sobrescrever o método showNotification do App para usar o novo sistema
-if (window.App) {
-    const originalShowNotification = App.showNotification;
-    App.showNotification = function(message, type = 'info', duration = 3000) {
+// Sobrescrever o método showNotification do App se existir
+if (typeof window !== 'undefined' && window.App) {
+    window.App.showNotification = function(message, type = 'info', duration = 3000) {
         Notificacao.mostrar(message, type, duration);
     };
 }
 
 // Inicializar quando a página carregar (exceto login)
+let realtimeInitialized = false;
+
 document.addEventListener('DOMContentLoaded', () => {
-    if (!window.location.pathname.includes('index.html') && 
-        window.location.pathname !== '/') {
+    const isLoginPage = window.location.pathname.includes('index.html') || 
+                        window.location.pathname === '/' ||
+                        window.location.pathname === '/index.html';
+    
+    if (!isLoginPage && !realtimeInitialized) {
+        realtimeInitialized = true;
         // Aguardar um pouco para garantir que o socket.io carregou
         setTimeout(() => {
             Realtime.init();
-        }, 1000);
+        }, 1500);
     }
 });
 
 // Exportar para uso global
-window.Notificacao = Notificacao;
-window.Realtime = Realtime;
+if (typeof window !== 'undefined') {
+    window.Notificacao = Notificacao;
+    window.Realtime = Realtime;
+}
+
+// Para módulo Node.js
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { Notificacao, Realtime };
+}

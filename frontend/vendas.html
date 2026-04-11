@@ -12,7 +12,7 @@
             <div class="sidebar-header">
                 <h3>PODPÁ</h3>
             </div>
-                   <ul class="sidebar-menu">
+            <ul class="sidebar-menu">
                 <li onclick="window.location.href='/dashboard.html'">📊 <span>Dashboard</span></li>
                 <li onclick="window.location.href='/produtos.html'">📦 <span>Produtos</span></li>
                 <li class="active">💰 <span>Vendas</span></li>
@@ -95,17 +95,21 @@
         </main>
     </div>
 
-    <!-- Scripts -->
+    <!-- ============================================ -->
+    <!-- SCRIPTS - ORDEM CORRETA (NÃO MUDAR!)        -->
+    <!-- ============================================ -->
+    <script src="/socket.io/socket.io.js"></script>
     <script src="/js/api.js"></script>
     <script src="/js/auth.js"></script>
-    <script src="/js/app.js"></script>
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="/js/realtime.js"></script>
     <script src="/js/barcode-reader.js"></script>
+    <script src="/js/realtime.js"></script>
+    <script src="/js/app.js"></script>
     
     <script>
     // Menu Hambúrguer para mobile
-    document.addEventListener('DOMContentLoaded', function() {
+    (function() {
+        if (document.querySelector('.menu-toggle')) return;
+        
         const menuToggle = document.createElement('button');
         menuToggle.className = 'menu-toggle';
         menuToggle.innerHTML = '☰';
@@ -119,32 +123,33 @@
         
         const sidebar = document.querySelector('.sidebar');
         
-        menuToggle.addEventListener('click', function() {
-            sidebar.classList.toggle('active');
-            overlay.classList.toggle('active');
-            menuToggle.classList.toggle('active');
-            menuToggle.innerHTML = sidebar.classList.contains('active') ? '✕' : '☰';
-        });
-        
-        overlay.addEventListener('click', function() {
-            sidebar.classList.remove('active');
-            overlay.classList.remove('active');
-            menuToggle.classList.remove('active');
-            menuToggle.innerHTML = '☰';
-        });
-        
-        // Fechar menu ao clicar em um item
-        document.querySelectorAll('.sidebar-menu li').forEach(item => {
-            item.addEventListener('click', function() {
-                if (window.innerWidth <= 768) {
-                    sidebar.classList.remove('active');
-                    overlay.classList.remove('active');
-                    menuToggle.classList.remove('active');
-                    menuToggle.innerHTML = '☰';
-                }
+        if (sidebar) {
+            menuToggle.addEventListener('click', function() {
+                sidebar.classList.toggle('active');
+                overlay.classList.toggle('active');
+                menuToggle.classList.toggle('active');
+                menuToggle.innerHTML = sidebar.classList.contains('active') ? '✕' : '☰';
             });
-        });
-    });
+            
+            overlay.addEventListener('click', function() {
+                sidebar.classList.remove('active');
+                overlay.classList.remove('active');
+                menuToggle.classList.remove('active');
+                menuToggle.innerHTML = '☰';
+            });
+            
+            document.querySelectorAll('.sidebar-menu li').forEach(item => {
+                item.addEventListener('click', function() {
+                    if (window.innerWidth <= 768) {
+                        sidebar.classList.remove('active');
+                        overlay.classList.remove('active');
+                        menuToggle.classList.remove('active');
+                        menuToggle.innerHTML = '☰';
+                    }
+                });
+            });
+        }
+    })();
     </script>
 </body>
 </html>

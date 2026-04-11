@@ -8,16 +8,19 @@ const { initializeDatabase, criarUsuariosPadrao } = require('./models/database')
 const app = express();
 const server = http.createServer(app);
 
+// URL do seu site no Render
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://sistemadega.onrender.com';
+
 // Configurar Socket.IO com CORS para produção
 const io = socketIo(server, {
     cors: {
         origin: process.env.NODE_ENV === 'production' 
-            ? ['https://seu-dominio.onrender.com', 'http://localhost:3000']
+            ? [FRONTEND_URL, 'http://localhost:3000', 'http://localhost:5500']
             : "*",
         methods: ["GET", "POST", "PUT", "DELETE"],
         credentials: true
     },
-    transports: ['websocket', 'polling'], // Fallback para polling se websocket falhar
+    transports: ['websocket', 'polling'],
     pingTimeout: 60000,
     pingInterval: 25000
 });
@@ -27,7 +30,7 @@ const PORT = process.env.PORT || 3000;
 // Configurar CORS para produção
 const corsOptions = {
     origin: process.env.NODE_ENV === 'production' 
-        ? ['https://seu-dominio.onrender.com', 'http://localhost:3000']
+        ? [FRONTEND_URL]
         : '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -53,7 +56,6 @@ async function initDatabase() {
         console.log('✅ Banco de dados inicializado com sucesso');
     } catch (error) {
         console.error('❌ Erro ao inicializar banco de dados:', error);
-        // Não deixar o servidor cair, mas marcar como não inicializado
         dbInitialized = false;
     }
 }
@@ -86,7 +88,7 @@ app.use('/api/exportar', require('./routes/exportacaoRoutes'));
 app.use('/api/gastos', require('./routes/gastoRoutes'));
 app.use('/api/caixa', require('./routes/caixaRoutes'));
 
-// Rotas do frontend - Com fallback para SPA
+// Rotas do frontend
 const frontendFiles = [
     'index.html', 'dashboard.html', 'produtos.html', 'vendas.html',
     'historico-vendas.html', 'categorias.html', 'relatorios.html',
@@ -104,7 +106,7 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
 
-// Rota de saúde - importante para o Render
+// Rota de saúde
 app.get('/health', (req, res) => {
     res.status(200).json({ 
         status: 'OK', 
@@ -114,14 +116,14 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Rota de status mais detalhada
+// Rota de status
 app.get('/api/status', (req, res) => {
     res.json({
         status: 'running',
         timestamp: new Date().toISOString(),
         database: dbInitialized ? 'ready' : 'initializing',
-        websocket: io.engine.clientsCount,
-        clients: io.engine.clientsCount
+        websocket: io.engine?.clientsCount || 0,
+        clients: io.engine?.clientsCount || 0
     });
 });
 
@@ -129,7 +131,6 @@ app.get('/api/status', (req, res) => {
 io.on('connection', (socket) => {
     console.log('🟢 Cliente conectado:', socket.id);
     
-    // Enviar status inicial
     socket.emit('connected', { 
         message: 'Conectado ao servidor',
         timestamp: new Date().toISOString()
@@ -148,7 +149,6 @@ io.on('connection', (socket) => {
 app.use((err, req, res, next) => {
     console.error('❌ Erro:', err.stack);
     
-    // Erro de banco de dados
     if (err.code === 'SQLITE_ERROR' || err.code === 'SQLITE_BUSY') {
         return res.status(503).json({ 
             error: 'Erro no banco de dados',
@@ -163,13 +163,11 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Rota 404 - deve ser a última
+// Rota 404
 app.use((req, res) => {
-    // Se for uma API, retornar JSON
     if (req.path.startsWith('/api/')) {
         return res.status(404).json({ error: 'Rota não encontrada' });
     }
-    // Para frontend, redirecionar para index (SPA)
     res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
 
@@ -190,7 +188,7 @@ process.on('SIGINT', () => {
     });
 });
 
-// Inicializar banco antes de iniciar o servidor
+// Inicializar servidor
 initDatabase().then(() => {
     server.listen(PORT, '0.0.0.0', () => {
         console.log(`🚀 Servidor rodando na porta ${PORT}`);
