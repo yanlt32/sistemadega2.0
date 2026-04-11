@@ -1567,7 +1567,7 @@ const Produtos = {
 };
 
 // ============================================
-// MÓDULO DE VENDAS - CORRIGIDO
+// MÓDULO DE VENDAS - CORRIGIDO COMPLETO
 // ============================================
 const Vendas = {
     carrinho: [],
@@ -1604,7 +1604,6 @@ const Vendas = {
             }
         } catch (error) {
             console.error('Erro ao verificar caixa:', error);
-            // Se erro na API, assume caixa fechado por segurança
             const btnFinalizar = document.getElementById('btnFinalizarVenda');
             if (btnFinalizar) {
                 btnFinalizar.disabled = true;
@@ -1633,7 +1632,6 @@ const Vendas = {
         
         const btnFinalizar = document.getElementById('btnFinalizarVenda');
         if (btnFinalizar) {
-            // Remove listeners antigos
             const newBtn = btnFinalizar.cloneNode(true);
             btnFinalizar.parentNode.replaceChild(newBtn, btnFinalizar);
             newBtn.addEventListener('click', () => {
@@ -1660,14 +1658,15 @@ const Vendas = {
         try {
             UI.showLoading();
             console.log('🔄 Carregando produtos da API...');
-            const data = await API.listarProdutos({ limit: 100 });
+            // AUMENTAR LIMITE PARA 1000 PARA PEGAR TODOS OS PRODUTOS
+            const data = await API.listarProdutos({ limit: 1000 });
             this.produtos = data.produtos || [];
             console.log('📦 Produtos carregados:', this.produtos.length);
+            console.log('📋 IDs dos produtos carregados:', this.produtos.map(p => p.id).join(', '));
             this.renderizarProdutos(this.produtos);
         } catch (error) {
             console.error('Erro ao carregar produtos:', error);
             App.showNotification('Erro ao carregar produtos', 'danger');
-            // Mostrar container vazio
             const container = document.getElementById('listaProdutos');
             if (container) {
                 container.innerHTML = `
@@ -1703,6 +1702,7 @@ const Vendas = {
         }
         
         console.log('🎨 Renderizando', produtos.length, 'produtos');
+        console.log('📋 IDs sendo renderizados:', produtos.map(p => p.id));
         
         container.innerHTML = produtos.map(p => {
             const disponivel = (p.quantidade || 0) > 0;
@@ -1722,8 +1722,7 @@ const Vendas = {
                             cursor: ${disponivel ? 'pointer' : 'not-allowed'}; 
                             opacity: ${disponivel ? '1' : '0.6'};
                             transition: all 0.2s ease; position: relative;
-                            border: 1px solid var(--border-color);
-                            hover: ${disponivel ? 'transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15);' : ''}">
+                            border: 1px solid var(--border-color);">
                     <h4 style="margin: 0 0 8px 0; font-size: 16px; color: var(--text-primary);">${nomeProduto}</h4>
                     <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">
                         ${categoriaNome} • ${tipoNome}
@@ -1744,21 +1743,27 @@ const Vendas = {
         console.log(`🎯 Encontrados ${cards.length} cards de produto`);
         
         cards.forEach(card => {
-            const produtoId = parseInt(card.dataset.produtoId);
+            const produtoIdAttr = card.dataset.produtoId;
+            const produtoId = parseInt(produtoIdAttr);
             const disponivel = card.style.opacity !== '0.6';
             
-            if (disponivel && produtoId) {
-                // Remove listener antigo se existir
+            console.log(`🔍 Card ID: ${produtoIdAttr} -> parseInt: ${produtoId}, disponível: ${disponivel}`);
+            
+            if (disponivel && !isNaN(produtoId)) {
                 const newCard = card.cloneNode(true);
                 card.parentNode.replaceChild(newCard, card);
                 
                 newCard.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    console.log('🖱️ Clique no produto ID:', produtoId);
-                    this.adicionarAoCarrinho(produtoId);
+                    const id = parseInt(newCard.dataset.produtoId);
+                    console.log('🖱️ Clique no produto ID:', id);
+                    if (!isNaN(id)) {
+                        this.adicionarAoCarrinho(id);
+                    } else {
+                        console.error('❌ ID inválido:', newCard.dataset.produtoId);
+                    }
                 });
                 
-                // Efeito hover
                 newCard.addEventListener('mouseenter', () => {
                     newCard.style.transform = 'translateY(-2px)';
                     newCard.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
@@ -1780,14 +1785,13 @@ const Vendas = {
     
     async buscarProdutos(termo) {
         if (!termo || termo.length < 2) {
-            // Se busca vazia, recarrega todos
             await this.carregarProdutos();
             return;
         }
         
         try {
             UI.showLoading();
-            const data = await API.listarProdutos({ busca: termo, limit: 100 });
+            const data = await API.listarProdutos({ busca: termo, limit: 1000 });
             this.renderizarProdutos(data.produtos || []);
         } catch (error) {
             console.error('Erro ao buscar produtos:', error);
@@ -1796,8 +1800,37 @@ const Vendas = {
         }
     },
     
+    async buscarProdutoEspecifico(id) {
+        try {
+            UI.showLoading();
+            console.log(`🔍 Buscando produto específico ID: ${id}`);
+            
+            // Buscar todos os produtos sem limite
+            const data = await API.listarProdutos({ limit: 1000 });
+            this.produtos = data.produtos || [];
+            
+            const produto = this.produtos.find(p => p.id === id);
+            
+            if (produto) {
+                console.log(`✅ Produto ${id} encontrado! Nome: ${produto.nome}`);
+                this.renderizarProdutos(this.produtos);
+                // Tentar adicionar novamente
+                this.adicionarAoCarrinho(id);
+            } else {
+                console.error(`❌ Produto ID ${id} não encontrado na API!`);
+                App.showNotification(`❌ Produto ID ${id} não encontrado no sistema!`, 'danger');
+            }
+        } catch (error) {
+            console.error('Erro ao buscar produto específico:', error);
+            App.showNotification('Erro ao carregar dados do produto', 'danger');
+        } finally {
+            UI.hideLoading();
+        }
+    },
+    
     adicionarAoCarrinho(produtoId) {
         console.log('➕ Adicionando produto ID:', produtoId);
+        console.log('📋 Produtos disponíveis no array:', this.produtos.map(p => ({ id: p.id, nome: p.nome })));
         
         if (!produtoId || isNaN(produtoId)) {
             console.error('❌ Produto ID inválido:', produtoId);
@@ -1805,11 +1838,15 @@ const Vendas = {
             return;
         }
         
-        const produto = this.produtos.find(p => p.id === produtoId);
+        const id = parseInt(produtoId);
+        const produto = this.produtos.find(p => p.id === id);
         
         if (!produto) {
-            console.error('❌ Produto não encontrado! ID:', produtoId);
-            App.showNotification(`Produto não encontrado!`, 'danger');
+            console.error(`❌ Produto ID ${id} não encontrado no array!`);
+            console.log(`🔍 IDs disponíveis no array:`, this.produtos.map(p => p.id).join(', '));
+            
+            // Tenta buscar o produto específico da API
+            this.buscarProdutoEspecifico(id);
             return;
         }
         
@@ -1825,7 +1862,6 @@ const Vendas = {
             return;
         }
         
-        // Verificar se é clique com Shift
         const isShiftClick = window.event && window.event.shiftKey;
         
         if (isShiftClick) {
@@ -1839,7 +1875,7 @@ const Vendas = {
             return;
         }
         
-        const itemExistente = this.carrinho.find(item => item.produto_id === produtoId);
+        const itemExistente = this.carrinho.find(item => item.produto_id === id);
         
         if (itemExistente) {
             if (itemExistente.quantidade >= (produto.quantidade || 0)) {
@@ -1862,8 +1898,7 @@ const Vendas = {
         
         this.atualizarCarrinho();
         
-        // Efeito visual no card clicado
-        const card = document.querySelector(`.produto-card[data-produto-id="${produtoId}"]`);
+        const card = document.querySelector(`.produto-card[data-produto-id="${id}"]`);
         if (card) {
             card.style.transform = 'scale(0.97)';
             card.style.transition = 'transform 0.1s ease';
@@ -1954,7 +1989,6 @@ const Vendas = {
         const { total, lucro } = this.calcularTotais();
         const quantidadeTotal = this.carrinho.reduce((acc, item) => acc + item.quantidade, 0);
         
-        // Atualizar badge de quantidade
         if (qtdElement) {
             qtdElement.textContent = quantidadeTotal;
             qtdElement.style.display = quantidadeTotal > 0 ? 'inline-block' : 'none';
@@ -2023,7 +2057,6 @@ const Vendas = {
             }
         }
         
-        // Habilitar/desabilitar botão finalizar baseado no carrinho
         const btnFinalizar = document.getElementById('btnFinalizarVenda');
         if (btnFinalizar && !btnFinalizar.disabled) {
             btnFinalizar.disabled = this.carrinho.length === 0;
@@ -2036,7 +2069,6 @@ const Vendas = {
         const formaPagamentoSelect = document.getElementById('formaPagamento');
         const formaPagamento = formaPagamentoSelect?.value;
         
-        // Validações
         if (this.carrinho.length === 0) {
             App.showNotification('Adicione itens ao carrinho!', 'warning');
             return;
@@ -2050,7 +2082,6 @@ const Vendas = {
         
         const { total } = this.calcularTotais();
         
-        // Confirmar venda
         const confirmado = confirm(
             `📋 CONFIRMAR VENDA\n\n` +
             `Itens: ${this.carrinho.reduce((acc, i) => acc + i.quantidade, 0)}\n` +
@@ -2064,7 +2095,6 @@ const Vendas = {
         try {
             UI.showLoading();
             
-            // Preparar dados da venda
             const venda = {
                 itens: this.carrinho.map(item => ({
                     produto_id: item.produto_id,
@@ -2077,49 +2107,28 @@ const Vendas = {
             };
             
             console.log('📝 Enviando venda:', venda);
-            
             const result = await API.criarVenda(venda);
-            
             console.log('✅ Venda finalizada:', result);
             
-            // Mostrar comprovante
-            const comprovante = `
-                ✅ VENDA REALIZADA COM SUCESSO!
-                
-                Nº: #${result.id || 'N/A'}
-                Data: ${new Date().toLocaleString()}
-                Total: ${UI.formatCurrency(result.total || total)}
-                Pagamento: ${formaPagamento}
-                
-                Obrigado pela preferência!
-            `;
+            App.showNotification(`✅ Venda finalizada! Total: ${UI.formatCurrency(result.total || total)}`, 'success', 5000);
             
-            App.showNotification(comprovante, 'success', 5000);
-            
-            // Limpar carrinho
             this.carrinho = [];
             this.atualizarCarrinho();
             
-            // Resetar forma de pagamento
-            if (formaPagamentoSelect) {
-                formaPagamentoSelect.value = '';
-            }
+            if (formaPagamentoSelect) formaPagamentoSelect.value = '';
             this.formaPagamento = '';
             
-            // Recarregar produtos para atualizar estoque
             await this.carregarProdutos();
-            
-            // Verificar caixa novamente
             await this.verificarCaixa();
             
         } catch (error) {
             console.error('❌ Erro ao finalizar venda:', error);
             
             let mensagem = 'Erro ao finalizar venda: ';
-            if (error.message.includes('Caixa fechado') || error.message.includes('caixa fechado')) {
+            if (error.message.includes('Caixa fechado')) {
                 mensagem = '❌ CAIXA FECHADO! Não é possível realizar vendas.';
             } else if (error.message.includes('estoque')) {
-                mensagem = '❌ Estoque insuficiente! Recarregue a página e tente novamente.';
+                mensagem = '❌ Estoque insuficiente! Recarregue a página.';
             } else {
                 mensagem += error.message;
             }
@@ -2130,7 +2139,6 @@ const Vendas = {
         }
     }
 };
-
 // ============================================
 // MÓDULO DE CATEGORIAS (APENAS ADMIN)
 // ============================================
