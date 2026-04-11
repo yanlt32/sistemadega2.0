@@ -54,9 +54,8 @@ const DashboardAdmin = {
         this.destruirGraficos();
         await this.carregarDados();
         
-        // Inicializar gráficos APÓS os dados estarem carregados
         setTimeout(() => {
-            if (!this.isDestroyed && this.data.vendasPorDia && this.data.vendasPorDia.length > 0) {
+            if (!this.isDestroyed) {
                 this.inicializarGraficos();
             }
         }, 200);
@@ -206,7 +205,73 @@ const DashboardAdmin = {
             const vendas = response.vendas || [];
             console.log('📊 Vendas encontradas:', vendas.length);
             
-            // Calcular totais do período
+            // ============================================
+            // CALCULAR VENDAS DOS ÚLTIMOS 7 DIAS
+            // ============================================
+            const hoje = new Date();
+            const ultimos7Dias = [];
+            const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+            let totalVendasSemana = 0;
+            let totalLucroSemana = 0;
+            
+            for (let i = 6; i >= 0; i--) {
+                const data = new Date();
+                data.setDate(hoje.getDate() - i);
+                data.setHours(0, 0, 0, 0);
+                
+                const dataFimDia = new Date(data);
+                dataFimDia.setHours(23, 59, 59, 999);
+                
+                // Filtrar vendas do dia específico
+                const vendasDia = vendas.filter(v => {
+                    if (!v.data_venda) return false;
+                    const dataVenda = new Date(v.data_venda);
+                    return dataVenda >= data && dataVenda <= dataFimDia;
+                });
+                
+                const totalDia = vendasDia.reduce((acc, v) => acc + (v.total || 0), 0);
+                const lucroDia = vendasDia.reduce((acc, v) => acc + (v.lucro || 0), 0);
+                
+                totalVendasSemana += totalDia;
+                totalLucroSemana += lucroDia;
+                
+                ultimos7Dias.push({
+                    data: diasSemana[data.getDay()],
+                    total: totalDia,
+                    lucro: lucroDia
+                });
+            }
+            
+            console.log('📊 Total vendas última semana:', totalVendasSemana);
+            console.log('📊 Total lucro última semana:', totalLucroSemana);
+            
+            // ============================================
+            // DADOS DO DIA (HOJE)
+            // ============================================
+            const hojeStr = hoje.toISOString().split('T')[0];
+            const hojeInicio = new Date(hojeStr);
+            hojeInicio.setHours(0, 0, 0, 0);
+            const hojeFim = new Date(hojeStr);
+            hojeFim.setHours(23, 59, 59, 999);
+            
+            const vendasHoje = vendas.filter(v => {
+                if (!v.data_venda) return false;
+                const dataVenda = new Date(v.data_venda);
+                return dataVenda >= hojeInicio && dataVenda <= hojeFim;
+            });
+            
+            let totalVendasHoje = 0;
+            let totalLucroHoje = 0;
+            let quantidadeHoje = vendasHoje.length;
+            
+            vendasHoje.forEach(v => {
+                totalVendasHoje += v.total || 0;
+                totalLucroHoje += v.lucro || 0;
+            });
+            
+            // ============================================
+            // TOTAIS DO PERÍODO FILTRADO
+            // ============================================
             let totalVendasPeriodo = 0;
             let totalLucroPeriodo = 0;
             
@@ -215,48 +280,9 @@ const DashboardAdmin = {
                 totalLucroPeriodo += v.lucro || 0;
             });
             
-            // Dados do dia
-            const hoje = new Date().toISOString().split('T')[0];
-            const vendasHojeResponse = await API.listarVendas({ 
-                data_inicio: hoje,
-                data_fim: hoje,
-                limite: 100
-            });
-            
-            const vendasHoje = vendasHojeResponse.vendas || [];
-            let totalVendasHoje = 0;
-            let totalLucroHoje = 0;
-            let quantidadeHoje = 0;
-            
-            vendasHoje.forEach(v => {
-                totalVendasHoje += v.total || 0;
-                totalLucroHoje += v.lucro || 0;
-                quantidadeHoje++;
-            });
-            
-            // Calcular vendas dos últimos 7 dias
-            const ultimos7Dias = [];
-            const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-            
-            for (let i = 6; i >= 0; i--) {
-                const data = new Date();
-                data.setDate(data.getDate() - i);
-                const dataStr = data.toISOString().split('T')[0];
-                
-                const vendasDia = vendas.filter(v => 
-                    v.data_venda && v.data_venda.split('T')[0] === dataStr
-                );
-                
-                const totalDia = vendasDia.reduce((acc, v) => acc + (v.total || 0), 0);
-                const diaSemana = diasSemana[data.getDay()];
-                
-                ultimos7Dias.push({
-                    data: diaSemana,
-                    total: totalDia
-                });
-            }
-            
-            // Produtos mais vendidos - SEM LOOP!
+            // ============================================
+            // PRODUTOS MAIS VENDIDOS
+            // ============================================
             const produtosMap = new Map();
             
             for (const venda of vendas) {
@@ -305,14 +331,20 @@ const DashboardAdmin = {
                 vendasPeriodo: totalVendasPeriodo,
                 lucroPeriodo: totalLucroPeriodo,
                 quantidadePeriodo: vendas.length,
-                vendasSemana: ultimos7Dias.reduce((acc, d) => acc + d.total, 0),
-                lucroSemana: ultimos7Dias.reduce((acc, d) => acc + (d.total * 0.3), 0),
+                vendasSemana: totalVendasSemana,
+                lucroSemana: totalLucroSemana,
                 vendasPorDia: ultimos7Dias,
                 produtosMaisVendidos,
                 estoqueBaixo,
                 ultimasVendas,
                 ticketMedio
             };
+            
+            console.log('📊 Dados calculados:', {
+                vendasHoje: totalVendasHoje,
+                vendasSemana: totalVendasSemana,
+                vendasPeriodo: totalVendasPeriodo
+            });
             
             this.atualizarCards();
             this.atualizarInfoFiltro();
@@ -449,7 +481,6 @@ const DashboardAdmin = {
     },
     
     inicializarGraficos() {
-        // Recriar os canvases para evitar problemas
         this.recriarCanvases();
         
         // Gráfico de Vendas
@@ -575,7 +606,6 @@ const DashboardAdmin = {
             this.charts.vendas.update();
             console.log('🔄 Gráfico de vendas atualizado');
         } else if (!this.charts.vendas) {
-            // Se o gráfico não existe, criar
             this.inicializarGraficos();
         }
         
@@ -656,7 +686,7 @@ const DashboardAdmin = {
         if (!tbody) return;
         
         if (!this.data.ultimasVendas || this.data.ultimasVendas.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">Nenhuma venda recente<\/td><\/tr>';
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">Nenhuma venda recente</td></tr>';
             return;
         }
         
@@ -666,7 +696,7 @@ const DashboardAdmin = {
                 <td>${new Date(v.data_venda).toLocaleString('pt-BR')}</td>
                 <td>${UI.formatCurrency(v.total)}</td>
                 <td><span class="badge badge-success">${v.forma_pagamento || 'N/A'}</span></td>
-            <\/tr>
+            </tr>
         `).join('');
     },
     
