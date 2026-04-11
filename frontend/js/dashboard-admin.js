@@ -1,10 +1,11 @@
 // ============================================
-// DASHBOARD ADMIN - VERSÃO COM FILTRO FUNCIONAL
+// DASHBOARD ADMIN - VERSÃO OTIMIZADA
 // ============================================
 const DashboardAdmin = {
     charts: {},
     data: {},
     refreshInterval: null,
+    loading: false, // Previne chamadas simultâneas
     filtroAtual: {
         tipo: 'mes',
         mes: new Date().getMonth() + 1,
@@ -143,6 +144,14 @@ const DashboardAdmin = {
     },
     
     async carregarDados() {
+        // Evita múltiplas chamadas simultâneas
+        if (this.loading) {
+            console.log('⏳ Carregamento já em andamento, ignorando...');
+            return;
+        }
+        
+        this.loading = true;
+        
         try {
             UI.showLoading();
             
@@ -162,7 +171,9 @@ const DashboardAdmin = {
             
             console.log('🔍 Buscando dados de:', dataInicioStr, 'até', dataFimStr);
             
-            // Buscar vendas do período filtrado
+            // ========================================
+            // 1. Buscar vendas do período (UMA VEZ)
+            // ========================================
             const response = await API.listarVendas({ 
                 data_inicio: dataInicioStr,
                 data_fim: dataFimStr,
@@ -172,7 +183,9 @@ const DashboardAdmin = {
             const vendas = response.vendas || [];
             console.log('📊 Vendas encontradas:', vendas.length);
             
-            // Calcular totais do período
+            // ========================================
+            // 2. Calcular totais do período
+            // ========================================
             let totalVendasPeriodo = 0;
             let totalLucroPeriodo = 0;
             let quantidadeVendas = vendas.length;
@@ -182,7 +195,9 @@ const DashboardAdmin = {
                 totalLucroPeriodo += v.lucro || 0;
             });
             
-            // Dados do dia (sempre atual)
+            // ========================================
+            // 3. Dados do dia (sempre atual)
+            // ========================================
             const hoje = new Date().toISOString().split('T')[0];
             const vendasHojeResponse = await API.listarVendas({ 
                 data_inicio: hoje,
@@ -201,7 +216,9 @@ const DashboardAdmin = {
                 quantidadeHoje++;
             });
             
-            // Calcular vendas dos últimos 7 dias
+            // ========================================
+            // 4. Calcular vendas dos últimos 7 dias
+            // ========================================
             const ultimos7Dias = [];
             for (let i = 6; i >= 0; i--) {
                 const data = new Date();
@@ -220,38 +237,93 @@ const DashboardAdmin = {
                 });
             }
             
-            // Buscar produtos mais vendidos do período
+            // ========================================
+            // 5. Produtos mais vendidos (OTIMIZADO)
+            // Agora usando os dados que já temos, sem fazer requisições extras!
+            // ========================================
             const produtosMap = new Map();
             
+            // Verificar se as vendas já têm os itens incluídos
             for (const venda of vendas) {
-                try {
-                    const detalhes = await API.buscarVenda(venda.id);
-                    if (detalhes.itens) {
-                        detalhes.itens.forEach(item => {
-                            const key = item.produto_id;
-                            if (!produtosMap.has(key)) {
-                                produtosMap.set(key, {
-                                    id: key,
-                                    nome: item.produto_nome || 'Produto',
-                                    quantidade: 0
-                                });
-                            }
-                            produtosMap.get(key).quantidade += item.quantidade || 0;
-                        });
+                // Se a venda já tiver os itens no objeto, use-os
+                if (venda.itens && Array.isArray(venda.itens)) {
+                    venda.itens.forEach(item => {
+                        const key = item.produto_id || item.id;
+                        if (!produtosMap.has(key)) {
+                            produtosMap.set(key, {
+                                id: key,
+                                nome: item.produto_nome || item.nome || 'Produto',
+                                quantidade: 0,
+                                total: 0
+                            });
+                        }
+                        const produto = produtosMap.get(key);
+                        produto.quantidade += item.quantidade || 0;
+                        produto.total += (item.preco_total || (item.preco_unitario * item.quantidade) || 0);
+                    });
+                }
+                // Se não tiver itens, tentar buscar apenas UMA VEZ em lote
+                else if (!venda.itens && vendas.length <= 50) {
+                    // Só busca detalhes se tiver poucas vendas (otimização)
+                    try {
+                        const detalhes = await API.buscarVenda(venda.id);
+                        if (detalhes.itens) {
+                            detalhes.itens.forEach(item => {
+                                const key = item.produto_id;
+                                if (!produtosMap.has(key)) {
+                                    produtosMap.set(key, {
+                                        id: key,
+                                        nome: item.produto_nome || 'Produto',
+                                        quantidade: 0,
+                                        total: 0
+                                    });
+                                }
+                                const produto = produtosMap.get(key);
+                                produto.quantidade += item.quantidade || 0;
+                                produto.total += item.preco_total || 0;
+                            });
+                        }
+                        // Delay pequeno para não sobrecarregar
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                    } catch (e) {
+                        console.warn(`Erro ao buscar detalhes da venda ${venda.id}:`, e);
                     }
-                } catch (e) {}
+                }
             }
             
             const produtosMaisVendidos = Array.from(produtosMap.values())
                 .sort((a, b) => b.quantidade - a.quantidade)
                 .slice(0, 5);
             
-            // Buscar estoque baixo
-            const estoqueBaixo = await API.estoqueBaixo().catch(() => []);
+            // ========================================
+            // 6. Buscar estoque baixo (UMA VEZ)
+            // ========================================
+            let estoqueBaixo = [];
+            try {
+                estoqueBaixo = await API.estoqueBaixo();
+            } catch (e) {
+                console.warn('Erro ao buscar estoque baixo:', e);
+            }
             
-            // Últimas vendas (sempre as mais recentes)
-            const ultimasVendas = await API.listarVendas({ limite: 5 }).catch(() => ({ vendas: [] }));
+            // ========================================
+            // 7. Últimas vendas (UMA VEZ)
+            // ========================================
+            let ultimasVendas = [];
+            try {
+                const ultimasVendasResponse = await API.listarVendas({ limite: 5 });
+                ultimasVendas = ultimasVendasResponse.vendas || [];
+            } catch (e) {
+                console.warn('Erro ao buscar últimas vendas:', e);
+            }
             
+            // ========================================
+            // 8. Calcular ticket médio
+            // ========================================
+            const ticketMedio = quantidadeHoje > 0 ? (totalVendasHoje / quantidadeHoje) : 0;
+            
+            // ========================================
+            // 9. Armazenar dados
+            // ========================================
             this.data = {
                 vendasHoje: totalVendasHoje,
                 lucroHoje: totalLucroHoje,
@@ -264,9 +336,13 @@ const DashboardAdmin = {
                 vendasPorDia: ultimos7Dias,
                 produtosMaisVendidos,
                 estoqueBaixo,
-                ultimasVendas: ultimasVendas.vendas || []
+                ultimasVendas,
+                ticketMedio
             };
             
+            // ========================================
+            // 10. Atualizar UI
+            // ========================================
             this.atualizarCards();
             this.atualizarInfoFiltro();
             this.atualizarGraficos();
@@ -277,8 +353,10 @@ const DashboardAdmin = {
             
         } catch (error) {
             console.error('Erro ao carregar dashboard:', error);
+            UI.showToast('Erro ao carregar dados do dashboard', 'error');
         } finally {
             UI.hideLoading();
+            this.loading = false;
         }
     },
     
@@ -326,8 +404,7 @@ const DashboardAdmin = {
             elementos.estoqueBaixo.textContent = this.data.estoqueBaixo?.length || 0;
         }
         if (elementos.ticketMedio) {
-            const ticket = this.data.quantidadeHoje > 0 ? (this.data.vendasHoje / this.data.quantidadeHoje) : 0;
-            elementos.ticketMedio.textContent = UI.formatCurrency(ticket);
+            elementos.ticketMedio.textContent = UI.formatCurrency(this.data.ticketMedio || 0);
         }
     },
     
@@ -564,9 +641,12 @@ const DashboardAdmin = {
     
     configurarAtualizacao() {
         if (this.refreshInterval) clearInterval(this.refreshInterval);
+        // Aumentar intervalo para 60 segundos (menos requisições)
         this.refreshInterval = setInterval(() => {
-            if (document.visibilityState === 'visible') this.carregarDados();
-        }, 30000);
+            if (document.visibilityState === 'visible' && !this.loading) {
+                this.carregarDados();
+            }
+        }, 60000); // 1 minuto
     }
 };
 
