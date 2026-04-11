@@ -11,7 +11,7 @@ let isInitializing = false;
 let initializedPages = new Set();
 
 // ============================================
-// CLASSE PRINCIPAL APP
+// CLASSE PRINCIPAL APP - CORRIGIDA
 // ============================================
 class App {
     constructor() {
@@ -34,6 +34,15 @@ class App {
         
         isInitializing = true;
         console.log(`🍷 PodPá v${this.version} inicializado`);
+        
+        // Inicializar configuração estática
+        if (!this.config) {
+            this.config = {
+                animations: true,
+                notifications: true,
+                autoSave: true
+            };
+        }
         
         // Inicializar módulos baseados na página atual
         this.setupEventListeners();
@@ -208,7 +217,16 @@ class App {
     }
 
     static showNotification(message, type = 'info', duration = 3000) {
-        if (!this.config.notifications) return;
+        // CORREÇÃO: Verificar se config existe
+        if (!this.config) {
+            this.config = {
+                animations: true,
+                notifications: true,
+                autoSave: true
+            };
+        }
+        
+        if (this.config.notifications === false) return;
         
         // Usar o sistema de notificação melhorado se disponível
         if (window.Notificacao) {
@@ -216,23 +234,54 @@ class App {
             return;
         }
         
-        // Fallback
+        // Fallback com estilos melhorados
+        const bgColor = type === 'success' ? '#10b981' : 
+                        type === 'danger' ? '#ef4444' : 
+                        type === 'warning' ? '#f59e0b' : '#3b82f6';
+        
+        const icon = type === 'success' ? '✅' : 
+                     type === 'danger' ? '❌' : 
+                     type === 'warning' ? '⚠️' : 'ℹ️';
+        
         const notification = document.createElement('div');
-        notification.className = `alert alert-${type}`;
-        notification.innerHTML = message;
+        notification.innerHTML = `
+            <div style="background: ${bgColor}; color: white; padding: 14px 20px; border-radius: 12px; 
+                        margin-bottom: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-weight: 500;
+                        display: flex; align-items: center; gap: 10px; min-width: 250px; max-width: 350px;">
+                <span style="font-size: 20px;">${icon}</span>
+                <span style="flex: 1;">${message}</span>
+            </div>
+        `;
         notification.style.position = 'fixed';
-        notification.style.top = '20px';
+        notification.style.bottom = '20px';
         notification.style.right = '20px';
         notification.style.zIndex = '9999';
-        notification.style.maxWidth = '350px';
         notification.style.animation = 'slideIn 0.3s ease';
-        notification.style.boxShadow = '0 5px 15px rgba(0,0,0,0.3)';
+        
+        // Adicionar estilo de animação se não existir
+        if (!document.querySelector('#notification-styles')) {
+            const style = document.createElement('style');
+            style.id = 'notification-styles';
+            style.textContent = `
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                @keyframes slideOut {
+                    from { transform: translateX(0); opacity: 1; }
+                    to { transform: translateX(100%); opacity: 0; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
         
         document.body.appendChild(notification);
         
         setTimeout(() => {
             notification.style.animation = 'slideOut 0.3s ease';
-            setTimeout(() => notification.remove(), 300);
+            setTimeout(() => {
+                if (notification && notification.remove) notification.remove();
+            }, 300);
         }, duration);
     }
 }
