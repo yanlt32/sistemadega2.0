@@ -1,12 +1,14 @@
 const API = {
+    // Contador de requisições para debug
+    _requestCount: 0,
+    _lastRequestTime: 0,
+    _requestHistory: [],
+    
     // Detectar ambiente (desenvolvimento ou produção)
     get baseURL() {
-        // Se estiver no Render (produção)
         if (window.location.hostname.includes('onrender.com')) {
-            // Usar a mesma origem (protocolo e hostname)
             return `${window.location.protocol}//${window.location.hostname}/api`;
         }
-        // Se estiver em desenvolvimento local
         return `http://${window.location.hostname}:3000/api`;
     },
     
@@ -18,11 +20,34 @@ const API = {
         const url = `${this.baseURL}${endpoint}`;
         const token = this.getToken();
         
-        console.log('📡 Requisição:', {
+        // Log com contador para identificar loops
+        this._requestCount++;
+        const now = Date.now();
+        const timeSinceLast = now - this._lastRequestTime;
+        this._lastRequestTime = now;
+        
+        // Manter histórico das últimas 10 requisições
+        this._requestHistory.unshift({
+            time: now,
+            endpoint,
+            method: options.method || 'GET',
+            interval: timeSinceLast
+        });
+        if (this._requestHistory.length > 10) this._requestHistory.pop();
+        
+        console.log(`📡 [${this._requestCount}] Requisição:`, {
             url,
             method: options.method || 'GET',
-            hasToken: !!token
+            hasToken: !!token,
+            intervalo: `${timeSinceLast}ms`
         });
+        
+        // Alerta se muitas requisições em pouco tempo
+        if (this._requestCount > 30 && timeSinceLast < 100) {
+            console.warn('⚠️⚠️⚠️ MUITAS REQUISIÇÕES RÁPIDAS! Possível loop infinito.');
+            console.warn(`Total de requisições: ${this._requestCount} em ${now - (this._lastRequestTime - timeSinceLast)}ms`);
+            console.warn('Últimas requisições:', this._requestHistory.slice(0, 5));
+        }
         
         const headers = {
             'Content-Type': 'application/json',
@@ -41,9 +66,7 @@ const API = {
                 credentials: 'same-origin'
             });
             
-            // Tratar erros de rede
             if (!response.ok) {
-                // Tentar parsear o erro como JSON
                 let errorData;
                 try {
                     errorData = await response.json();
@@ -51,7 +74,6 @@ const API = {
                     errorData = { error: response.statusText };
                 }
                 
-                // Se for 401 (não autorizado)
                 if (response.status === 401) {
                     localStorage.removeItem('token');
                     localStorage.removeItem('user');
@@ -62,9 +84,7 @@ const API = {
                     throw new Error(errorData.error || 'Sessão expirada');
                 }
                 
-                // Outros erros - incluir dados adicionais se disponíveis
                 const error = new Error(errorData.error || `Erro ${response.status}: ${response.statusText}`);
-                // Adicionar dados extras do erro (como quantidade, tipo, etc)
                 if (errorData.quantidade) error.quantidade = errorData.quantidade;
                 if (errorData.tipo) error.tipo = errorData.tipo;
                 if (errorData.doses) error.doses = errorData.doses;
@@ -75,7 +95,6 @@ const API = {
                 throw error;
             }
             
-            // Se não houver conteúdo, retornar vazio
             if (response.status === 204) {
                 return { success: true };
             }
@@ -84,7 +103,6 @@ const API = {
             return data;
         } catch (error) {
             console.error('❌ API Error:', error);
-            // Se for erro de rede (CORS, servidor offline)
             if (error.name === 'TypeError' && error.message.includes('fetch')) {
                 throw new Error('Erro de conexão com o servidor. Verifique sua internet ou tente novamente mais tarde.');
             }
@@ -151,7 +169,6 @@ const API = {
         });
     },
     
-    // NOVA FUNÇÃO: Forçar exclusão de produto (remove dependências)
     async forcarExclusaoProduto(id, senha_admin) {
         return this.request(`/produtos/${id}/forcar`, {
             method: 'DELETE',
