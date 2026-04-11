@@ -1518,7 +1518,7 @@ const Produtos = {
 };
 
 // ============================================
-// MÓDULO DE VENDAS
+// MÓDULO DE VENDAS - CORRIGIDO
 // ============================================
 const Vendas = {
     carrinho: [],
@@ -1526,11 +1526,13 @@ const Vendas = {
     formaPagamento: '',
     
     async init() {
+        console.log('🛒 Inicializando módulo de vendas...');
         await Auth.checkAuth();
         await this.carregarProdutos();
         this.setupEventListeners();
         this.atualizarCarrinho();
         this.verificarCaixa();
+        console.log('✅ Módulo de vendas inicializado com', this.produtos.length, 'produtos');
     },
     
     async verificarCaixa() {
@@ -1594,8 +1596,11 @@ const Vendas = {
     async carregarProdutos() {
         try {
             UI.showLoading();
+            console.log('🔄 Carregando produtos...');
             const data = await API.listarProdutos({ limit: 100 });
             this.produtos = data.produtos || [];
+            console.log('📦 Produtos carregados:', this.produtos.length);
+            console.log('📋 Primeiro produto:', this.produtos[0]);
             this.renderizarProdutos(this.produtos);
         } catch (error) {
             console.error('Erro ao carregar produtos:', error);
@@ -1607,27 +1612,35 @@ const Vendas = {
     
     renderizarProdutos(produtos) {
         const container = document.getElementById('listaProdutos');
-        if (!container) return;
+        if (!container) {
+            console.error('❌ Container listaProdutos não encontrado!');
+            return;
+        }
         
-        if (produtos.length === 0) {
+        if (!produtos || produtos.length === 0) {
             container.innerHTML = `
                 <div style="text-align: center; padding: 50px; grid-column: 1/-1;">
                     <div style="font-size: 48px;">🔍</div>
                     <h3>Nenhum produto encontrado</h3>
+                    <p style="color: var(--text-muted);">Cadastre produtos para começar a vender</p>
                 </div>
             `;
             return;
         }
         
+        console.log('🎨 Renderizando', produtos.length, 'produtos');
+        
         container.innerHTML = produtos.map(p => {
             const disponivel = (p.quantidade || 0) > 0;
+            const precoFormatado = UI.formatCurrency(p.preco_venda || 0);
+            
             return `
-                <div class="card produto-card" onclick="Vendas.adicionarAoCarrinho(${p.id})" style="${!disponivel ? 'opacity: 0.6; cursor: not-allowed;' : ''}">
-                    <h4>${p.nome || 'Sem nome'}</h4>
+                <div class="card produto-card" data-produto-id="${p.id}" style="${!disponivel ? 'opacity: 0.6; cursor: not-allowed;' : 'cursor: pointer;'}">
+                    <h4>${this.escapeHtml(p.nome) || 'Sem nome'}</h4>
                     <div class="categoria">
-                        ${p.categoria_nome || 'Sem categoria'} • ${p.tipo_nome || 'Sem tipo'}
+                        ${this.escapeHtml(p.categoria_nome) || 'Sem categoria'} • ${this.escapeHtml(p.tipo_nome) || 'Sem tipo'}
                     </div>
-                    <div class="preco">${UI.formatCurrency(p.preco_venda)}</div>
+                    <div class="preco">${precoFormatado}</div>
                     <div class="estoque ${(p.quantidade || 0) < 5 && disponivel ? 'estoque-baixo' : ''}">
                         📦 Estoque: ${p.quantidade || 0}
                     </div>
@@ -1638,6 +1651,28 @@ const Vendas = {
                 </div>
             `;
         }).join('');
+        
+        // Adicionar event listeners após renderizar
+        document.querySelectorAll('.produto-card').forEach(card => {
+            const produtoId = card.dataset.produtoId;
+            if (produtoId) {
+                card.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    console.log('🖱️ Clique no card do produto:', produtoId);
+                    this.adicionarAoCarrinho(parseInt(produtoId));
+                });
+            }
+        });
+    },
+    
+    escapeHtml(text) {
+        if (!text) return '';
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     },
     
     async buscarProdutos(termo) {
@@ -1650,16 +1685,43 @@ const Vendas = {
     },
     
     adicionarAoCarrinho(produtoId) {
-        const produto = this.produtos.find(p => p.id === produtoId);
+        console.log('🖱️ adicionarAoCarrinho chamado com ID:', produtoId);
+        console.log('📦 Produtos disponíveis:', this.produtos.length);
         
-        if (!produto) return;
-        
-        if ((produto.quantidade || 0) <= 0) {
-            App.showNotification('Produto sem estoque!', 'warning');
+        // Verificar se produtoId é válido
+        if (!produtoId || isNaN(produtoId)) {
+            console.error('❌ Produto ID inválido:', produtoId);
+            App.showNotification('Erro: ID do produto inválido', 'danger');
             return;
         }
         
-        if (window.event?.shiftKey) {
+        const produto = this.produtos.find(p => p.id === produtoId);
+        
+        if (!produto) {
+            console.error('❌ Produto não encontrado! ID buscado:', produtoId);
+            console.log('🔍 IDs disponíveis:', this.produtos.map(p => p.id));
+            App.showNotification(`Produto ID ${produtoId} não encontrado!`, 'danger');
+            return;
+        }
+        
+        console.log('✅ Produto encontrado:', produto.nome);
+        console.log('💰 Preço:', produto.preco_venda);
+        console.log('📦 Estoque:', produto.quantidade);
+        
+        if ((produto.quantidade || 0) <= 0) {
+            App.showNotification(`❌ Produto "${produto.nome}" sem estoque!`, 'warning');
+            return;
+        }
+        
+        if (!produto.preco_venda || produto.preco_venda <= 0) {
+            App.showNotification(`❌ Produto "${produto.nome}" sem preço de venda definido!`, 'danger');
+            return;
+        }
+        
+        // Verificar se é clique com Shift
+        const isShiftClick = window.event && window.event.shiftKey;
+        
+        if (isShiftClick) {
             const quantidade = prompt(`Quantidade de ${produto.nome}:`, '1');
             if (quantidade) {
                 const qtd = parseInt(quantidade);
@@ -1678,25 +1740,31 @@ const Vendas = {
                 return;
             }
             itemExistente.quantidade++;
+            console.log(`➕ Quantidade aumentada para ${itemExistente.quantidade}`);
+            App.showNotification(`✅ ${produto.nome} - Quantidade: ${itemExistente.quantidade}`, 'success');
         } else {
             this.carrinho.push({
                 produto_id: produto.id,
                 nome: produto.nome,
                 preco: produto.preco_venda,
-                preco_custo: produto.preco_custo,
+                preco_custo: produto.preco_custo || 0,
                 quantidade: 1,
                 estoque: produto.quantidade
             });
+            console.log(`➕ Novo item adicionado: ${produto.nome}`);
+            App.showNotification(`✅ ${produto.nome} adicionado ao carrinho!`, 'success');
         }
         
         this.atualizarCarrinho();
         
-        const card = window.event?.target?.closest('.produto-card');
+        // Efeito visual no card clicado
+        const card = document.querySelector(`.produto-card[data-produto-id="${produtoId}"]`);
         if (card) {
-            card.style.transform = 'scale(0.95)';
+            card.style.transform = 'scale(0.98)';
+            card.style.transition = 'transform 0.1s ease';
             setTimeout(() => {
                 card.style.transform = '';
-            }, 100);
+            }, 150);
         }
     },
     
@@ -1731,8 +1799,10 @@ const Vendas = {
     
     removerDoCarrinho(index) {
         if (confirm('Remover item do carrinho?')) {
+            const item = this.carrinho[index];
             this.carrinho.splice(index, 1);
             this.atualizarCarrinho();
+            App.showNotification(`❌ ${item.nome} removido do carrinho`, 'info');
         }
     },
     
@@ -1792,7 +1862,7 @@ const Vendas = {
             container.innerHTML = this.carrinho.map((item, index) => `
                 <div class="cart-item">
                     <div class="cart-item-header">
-                        <strong>${item.nome}</strong>
+                        <strong>${this.escapeHtml(item.nome)}</strong>
                         <span>${UI.formatCurrency((item.preco || 0) * item.quantidade)}</span>
                     </div>
                     
