@@ -1,18 +1,33 @@
 // ============================================
-// DASHBOARD ADMIN - VERSÃO OTIMIZADA
+// DASHBOARD ADMIN - VERSÃO OTIMIZADA (SEM LOOP)
 // ============================================
 const DashboardAdmin = {
     charts: {},
     data: {},
     refreshInterval: null,
-    loading: false, // Previne chamadas simultâneas
+    loading: false,
+    isDestroyed: false,
     filtroAtual: {
         tipo: 'mes',
         mes: new Date().getMonth() + 1,
         ano: new Date().getFullYear()
     },
     
+    destroy() {
+        this.isDestroyed = true;
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+            this.refreshInterval = null;
+        }
+        this.destruirGraficos();
+    },
+    
     async init() {
+        if (this.isDestroyed) {
+            console.log('Dashboard foi destruído, recriando...');
+            this.isDestroyed = false;
+        }
+        
         await Auth.checkAuth();
         
         const user = Auth.getCurrentUser();
@@ -21,22 +36,35 @@ const DashboardAdmin = {
             return;
         }
         
+        const userNomeSpan = document.getElementById('userNome');
+        if (userNomeSpan) {
+            userNomeSpan.textContent = user.nome || user.username;
+        }
+        
+        const userRoleSpan = document.getElementById('userRole');
+        if (userRoleSpan) {
+            userRoleSpan.textContent = 'Admin';
+            userRoleSpan.className = 'badge badge-success';
+        }
+        
         this.adicionarFiltro();
         this.destruirGraficos();
         await this.carregarDados();
         
         setTimeout(() => {
-            this.inicializarGraficos();
+            if (!this.isDestroyed) {
+                this.inicializarGraficos();
+            }
         }, 100);
         
         this.configurarAtualizacao();
     },
     
     adicionarFiltro() {
+        if (document.getElementById('filtroDashboard')) return;
+        
         const topBar = document.querySelector('.top-bar');
         if (!topBar) return;
-        
-        if (document.getElementById('filtroDashboard')) return;
         
         const filtroDiv = document.createElement('div');
         filtroDiv.id = 'filtroDashboard';
@@ -55,18 +83,7 @@ const DashboardAdmin = {
             
             <div id="filtroMesContainer" style="display: inline-block;">
                 <select id="filtroMes" style="padding: 8px; border-radius: 6px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color);">
-                    <option value="1">Janeiro</option>
-                    <option value="2">Fevereiro</option>
-                    <option value="3">Março</option>
-                    <option value="4">Abril</option>
-                    <option value="5">Maio</option>
-                    <option value="6">Junho</option>
-                    <option value="7">Julho</option>
-                    <option value="8">Agosto</option>
-                    <option value="9">Setembro</option>
-                    <option value="10">Outubro</option>
-                    <option value="11">Novembro</option>
-                    <option value="12">Dezembro</option>
+                    ${this.gerarOptionsMeses()}
                 </select>
             </div>
             
@@ -83,13 +100,19 @@ const DashboardAdmin = {
         document.getElementById('filtroTipo').addEventListener('change', (e) => {
             const tipo = e.target.value;
             const mesContainer = document.getElementById('filtroMesContainer');
-            
-            if (tipo === 'mes') {
-                mesContainer.style.display = 'inline-block';
-            } else {
-                mesContainer.style.display = 'none';
+            if (mesContainer) {
+                mesContainer.style.display = tipo === 'mes' ? 'inline-block' : 'none';
             }
         });
+    },
+    
+    gerarOptionsMeses() {
+        const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
+                       'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+        const mesAtual = new Date().getMonth() + 1;
+        return meses.map((mes, i) => 
+            `<option value="${i + 1}" ${i + 1 === mesAtual ? 'selected' : ''}>${mes}</option>`
+        ).join('');
     },
     
     aplicarFiltro() {
@@ -122,7 +145,8 @@ const DashboardAdmin = {
         if (mesSelect) mesSelect.value = this.filtroAtual.mes;
         if (anoInput) anoInput.value = this.filtroAtual.ano;
         
-        document.getElementById('filtroMesContainer').style.display = 'inline-block';
+        const mesContainer = document.getElementById('filtroMesContainer');
+        if (mesContainer) mesContainer.style.display = 'inline-block';
         
         this.carregarDados();
     },
@@ -133,18 +157,16 @@ const DashboardAdmin = {
                 this.charts.vendas.destroy();
                 this.charts.vendas = null;
             }
-        } catch (e) {}
-        
-        try {
             if (this.charts.produtos) {
                 this.charts.produtos.destroy();
                 this.charts.produtos = null;
             }
-        } catch (e) {}
+        } catch (e) {
+            console.warn('Erro ao destruir gráficos:', e);
+        }
     },
     
     async carregarDados() {
-        // Evita múltiplas chamadas simultâneas
         if (this.loading) {
             console.log('⏳ Carregamento já em andamento, ignorando...');
             return;
@@ -155,7 +177,6 @@ const DashboardAdmin = {
         try {
             UI.showLoading();
             
-            // Calcular datas do período filtrado
             let dataInicio, dataFim;
             
             if (this.filtroAtual.tipo === 'mes') {
@@ -171,9 +192,7 @@ const DashboardAdmin = {
             
             console.log('🔍 Buscando dados de:', dataInicioStr, 'até', dataFimStr);
             
-            // ========================================
-            // 1. Buscar vendas do período (UMA VEZ)
-            // ========================================
+            // Buscar vendas do período (UMA VEZ)
             const response = await API.listarVendas({ 
                 data_inicio: dataInicioStr,
                 data_fim: dataFimStr,
@@ -183,21 +202,16 @@ const DashboardAdmin = {
             const vendas = response.vendas || [];
             console.log('📊 Vendas encontradas:', vendas.length);
             
-            // ========================================
-            // 2. Calcular totais do período
-            // ========================================
+            // Calcular totais do período
             let totalVendasPeriodo = 0;
             let totalLucroPeriodo = 0;
-            let quantidadeVendas = vendas.length;
             
             vendas.forEach(v => {
                 totalVendasPeriodo += v.total || 0;
                 totalLucroPeriodo += v.lucro || 0;
             });
             
-            // ========================================
-            // 3. Dados do dia (sempre atual)
-            // ========================================
+            // Dados do dia
             const hoje = new Date().toISOString().split('T')[0];
             const vendasHojeResponse = await API.listarVendas({ 
                 data_inicio: hoje,
@@ -216,9 +230,7 @@ const DashboardAdmin = {
                 quantidadeHoje++;
             });
             
-            // ========================================
-            // 4. Calcular vendas dos últimos 7 dias
-            // ========================================
+            // Calcular vendas dos últimos 7 dias
             const ultimos7Dias = [];
             for (let i = 6; i >= 0; i--) {
                 const data = new Date();
@@ -237,15 +249,14 @@ const DashboardAdmin = {
                 });
             }
             
-            // ========================================
-            // 5. Produtos mais vendidos (OTIMIZADO)
-            // Agora usando os dados que já temos, sem fazer requisições extras!
-            // ========================================
+            // ============================================
+            // PRODUTOS MAIS VENDIDOS - SEM LOOP DE REQUISIÇÕES!
+            // Usa apenas os dados que já temos
+            // ============================================
             const produtosMap = new Map();
             
-            // Verificar se as vendas já têm os itens incluídos
             for (const venda of vendas) {
-                // Se a venda já tiver os itens no objeto, use-os
+                // Se a venda já tem os itens, use-os
                 if (venda.itens && Array.isArray(venda.itens)) {
                     venda.itens.forEach(item => {
                         const key = item.produto_id || item.id;
@@ -253,41 +264,11 @@ const DashboardAdmin = {
                             produtosMap.set(key, {
                                 id: key,
                                 nome: item.produto_nome || item.nome || 'Produto',
-                                quantidade: 0,
-                                total: 0
+                                quantidade: 0
                             });
                         }
-                        const produto = produtosMap.get(key);
-                        produto.quantidade += item.quantidade || 0;
-                        produto.total += (item.preco_total || (item.preco_unitario * item.quantidade) || 0);
+                        produtosMap.get(key).quantidade += item.quantidade || 0;
                     });
-                }
-                // Se não tiver itens, tentar buscar apenas UMA VEZ em lote
-                else if (!venda.itens && vendas.length <= 50) {
-                    // Só busca detalhes se tiver poucas vendas (otimização)
-                    try {
-                        const detalhes = await API.buscarVenda(venda.id);
-                        if (detalhes.itens) {
-                            detalhes.itens.forEach(item => {
-                                const key = item.produto_id;
-                                if (!produtosMap.has(key)) {
-                                    produtosMap.set(key, {
-                                        id: key,
-                                        nome: item.produto_nome || 'Produto',
-                                        quantidade: 0,
-                                        total: 0
-                                    });
-                                }
-                                const produto = produtosMap.get(key);
-                                produto.quantidade += item.quantidade || 0;
-                                produto.total += item.preco_total || 0;
-                            });
-                        }
-                        // Delay pequeno para não sobrecarregar
-                        await new Promise(resolve => setTimeout(resolve, 50));
-                    } catch (e) {
-                        console.warn(`Erro ao buscar detalhes da venda ${venda.id}:`, e);
-                    }
                 }
             }
             
@@ -295,9 +276,9 @@ const DashboardAdmin = {
                 .sort((a, b) => b.quantidade - a.quantidade)
                 .slice(0, 5);
             
-            // ========================================
-            // 6. Buscar estoque baixo (UMA VEZ)
-            // ========================================
+            console.log('🏆 Produtos mais vendidos:', produtosMaisVendidos);
+            
+            // Buscar estoque baixo (UMA REQUISIÇÃO)
             let estoqueBaixo = [];
             try {
                 estoqueBaixo = await API.estoqueBaixo();
@@ -305,9 +286,7 @@ const DashboardAdmin = {
                 console.warn('Erro ao buscar estoque baixo:', e);
             }
             
-            // ========================================
-            // 7. Últimas vendas (UMA VEZ)
-            // ========================================
+            // Últimas vendas (UMA REQUISIÇÃO)
             let ultimasVendas = [];
             try {
                 const ultimasVendasResponse = await API.listarVendas({ limite: 5 });
@@ -316,21 +295,15 @@ const DashboardAdmin = {
                 console.warn('Erro ao buscar últimas vendas:', e);
             }
             
-            // ========================================
-            // 8. Calcular ticket médio
-            // ========================================
             const ticketMedio = quantidadeHoje > 0 ? (totalVendasHoje / quantidadeHoje) : 0;
             
-            // ========================================
-            // 9. Armazenar dados
-            // ========================================
             this.data = {
                 vendasHoje: totalVendasHoje,
                 lucroHoje: totalLucroHoje,
                 quantidadeHoje,
                 vendasPeriodo: totalVendasPeriodo,
                 lucroPeriodo: totalLucroPeriodo,
-                quantidadePeriodo: quantidadeVendas,
+                quantidadePeriodo: vendas.length,
                 vendasSemana: ultimos7Dias.reduce((acc, d) => acc + d.total, 0),
                 lucroSemana: ultimos7Dias.reduce((acc, d) => acc + (d.total * 0.3), 0),
                 vendasPorDia: ultimos7Dias,
@@ -340,9 +313,6 @@ const DashboardAdmin = {
                 ticketMedio
             };
             
-            // ========================================
-            // 10. Atualizar UI
-            // ========================================
             this.atualizarCards();
             this.atualizarInfoFiltro();
             this.atualizarGraficos();
@@ -350,6 +320,8 @@ const DashboardAdmin = {
             this.mostrarProdutosMaisVendidos();
             this.mostrarUltimasVendas();
             this.atualizarPagamentos();
+            
+            console.log('✅ Dashboard carregado com sucesso! Total de requisições:', API._requestCount);
             
         } catch (error) {
             console.error('Erro ao carregar dashboard:', error);
@@ -361,8 +333,23 @@ const DashboardAdmin = {
     },
     
     atualizarInfoFiltro() {
-        const periodoInfo = document.getElementById('periodoInfo');
-        if (!periodoInfo) return;
+        let periodoInfo = document.getElementById('periodoInfo');
+        if (!periodoInfo) {
+            periodoInfo = document.createElement('div');
+            periodoInfo.id = 'periodoInfo';
+            periodoInfo.style.textAlign = 'center';
+            periodoInfo.style.marginBottom = '10px';
+            periodoInfo.style.padding = '5px 15px';
+            periodoInfo.style.borderRadius = '20px';
+            periodoInfo.style.fontSize = '14px';
+            periodoInfo.style.color = 'var(--text-secondary)';
+            periodoInfo.style.background = 'var(--bg-tertiary)';
+            
+            const statsGrid = document.querySelector('.dashboard-stats');
+            if (statsGrid && statsGrid.parentNode) {
+                statsGrid.parentNode.insertBefore(periodoInfo, statsGrid);
+            }
+        }
         
         const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
                        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -464,7 +451,7 @@ const DashboardAdmin = {
         this.recriarCanvases();
         
         const ctxVendas = document.getElementById('graficoVendasSemana');
-        if (ctxVendas) {
+        if (ctxVendas && !this.charts.vendas) {
             try {
                 this.charts.vendas = new Chart(ctxVendas, {
                     type: 'line',
@@ -509,7 +496,7 @@ const DashboardAdmin = {
         }
         
         const ctxProdutos = document.getElementById('graficoProdutos');
-        if (ctxProdutos && this.data.produtosMaisVendidos.length > 0) {
+        if (ctxProdutos && this.data.produtosMaisVendidos.length > 0 && !this.charts.produtos) {
             try {
                 this.charts.produtos = new Chart(ctxProdutos, {
                     type: 'bar',
@@ -594,7 +581,7 @@ const DashboardAdmin = {
                     <strong>${p.nome}</strong><br>
                     <small style="color: var(--text-muted);">Estoque: ${p.quantidade} unidades</small>
                 </div>
-                <button class="btn btn-primary btn-sm" onclick="Produtos.abrirModalEstoque(${p.id})">Repor</button>
+                <button class="btn btn-primary btn-sm" onclick="if(window.Produtos) Produtos.abrirModalEstoque(${p.id})">Repor</button>
             </div>
         `).join('');
     },
@@ -641,20 +628,16 @@ const DashboardAdmin = {
     
     configurarAtualizacao() {
         if (this.refreshInterval) clearInterval(this.refreshInterval);
-        // Aumentar intervalo para 60 segundos (menos requisições)
+        // Atualizar a cada 60 segundos
         this.refreshInterval = setInterval(() => {
-            if (document.visibilityState === 'visible' && !this.loading) {
+            if (document.visibilityState === 'visible' && !this.loading && !this.isDestroyed) {
                 this.carregarDados();
             }
-        }, 60000); // 1 minuto
+        }, 60000);
     }
 };
 
 // Inicializar
-document.addEventListener('DOMContentLoaded', () => {
-    if (window.location.pathname.includes('dashboard.html')) {
-        DashboardAdmin.init();
-    }
-});
-
-window.DashboardAdmin = DashboardAdmin;
+if (typeof window !== 'undefined') {
+    window.DashboardAdmin = DashboardAdmin;
+}
