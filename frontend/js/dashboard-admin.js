@@ -1,9 +1,12 @@
 // ============================================
-// DASHBOARD ADMIN - VERSÃO OTIMIZADA (SEM LOOP)
+// DASHBOARD ADMIN - VERSÃO COMPLETA CORRIGIDA
 // ============================================
 const DashboardAdmin = {
     charts: {},
-    data: {},
+    data: {
+        vendasPorDia: [],
+        produtosMaisVendidos: []
+    },
     refreshInterval: null,
     loading: false,
     isDestroyed: false,
@@ -51,11 +54,12 @@ const DashboardAdmin = {
         this.destruirGraficos();
         await this.carregarDados();
         
+        // Inicializar gráficos APÓS os dados estarem carregados
         setTimeout(() => {
-            if (!this.isDestroyed) {
+            if (!this.isDestroyed && this.data.vendasPorDia && this.data.vendasPorDia.length > 0) {
                 this.inicializarGraficos();
             }
-        }, 100);
+        }, 200);
         
         this.configurarAtualizacao();
     },
@@ -192,7 +196,7 @@ const DashboardAdmin = {
             
             console.log('🔍 Buscando dados de:', dataInicioStr, 'até', dataFimStr);
             
-            // Buscar vendas do período (UMA VEZ)
+            // Buscar vendas do período
             const response = await API.listarVendas({ 
                 data_inicio: dataInicioStr,
                 data_fim: dataFimStr,
@@ -232,6 +236,8 @@ const DashboardAdmin = {
             
             // Calcular vendas dos últimos 7 dias
             const ultimos7Dias = [];
+            const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+            
             for (let i = 6; i >= 0; i--) {
                 const data = new Date();
                 data.setDate(data.getDate() - i);
@@ -242,21 +248,18 @@ const DashboardAdmin = {
                 );
                 
                 const totalDia = vendasDia.reduce((acc, v) => acc + (v.total || 0), 0);
+                const diaSemana = diasSemana[data.getDay()];
                 
                 ultimos7Dias.push({
-                    data: data.toLocaleDateString('pt-BR', { weekday: 'short' }),
+                    data: diaSemana,
                     total: totalDia
                 });
             }
             
-            // ============================================
-            // PRODUTOS MAIS VENDIDOS - SEM LOOP DE REQUISIÇÕES!
-            // Usa apenas os dados que já temos
-            // ============================================
+            // Produtos mais vendidos - SEM LOOP!
             const produtosMap = new Map();
             
             for (const venda of vendas) {
-                // Se a venda já tem os itens, use-os
                 if (venda.itens && Array.isArray(venda.itens)) {
                     venda.itens.forEach(item => {
                         const key = item.produto_id || item.id;
@@ -276,9 +279,7 @@ const DashboardAdmin = {
                 .sort((a, b) => b.quantidade - a.quantidade)
                 .slice(0, 5);
             
-            console.log('🏆 Produtos mais vendidos:', produtosMaisVendidos);
-            
-            // Buscar estoque baixo (UMA REQUISIÇÃO)
+            // Buscar estoque baixo
             let estoqueBaixo = [];
             try {
                 estoqueBaixo = await API.estoqueBaixo();
@@ -286,7 +287,7 @@ const DashboardAdmin = {
                 console.warn('Erro ao buscar estoque baixo:', e);
             }
             
-            // Últimas vendas (UMA REQUISIÇÃO)
+            // Últimas vendas
             let ultimasVendas = [];
             try {
                 const ultimasVendasResponse = await API.listarVendas({ limite: 5 });
@@ -315,13 +316,13 @@ const DashboardAdmin = {
             
             this.atualizarCards();
             this.atualizarInfoFiltro();
-            this.atualizarGraficos();
             this.mostrarEstoqueBaixo();
             this.mostrarProdutosMaisVendidos();
             this.mostrarUltimasVendas();
             this.atualizarPagamentos();
             
-            console.log('✅ Dashboard carregado com sucesso! Total de requisições:', API._requestCount);
+            // Atualizar gráficos
+            this.atualizarGraficos();
             
         } catch (error) {
             console.error('Erro ao carregar dashboard:', error);
@@ -448,18 +449,23 @@ const DashboardAdmin = {
     },
     
     inicializarGraficos() {
+        // Recriar os canvases para evitar problemas
         this.recriarCanvases();
         
+        // Gráfico de Vendas
         const ctxVendas = document.getElementById('graficoVendasSemana');
         if (ctxVendas && !this.charts.vendas) {
             try {
+                const labels = this.data.vendasPorDia?.map(d => d.data) || ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+                const dados = this.data.vendasPorDia?.map(d => d.total) || [0, 0, 0, 0, 0, 0, 0];
+                
                 this.charts.vendas = new Chart(ctxVendas, {
                     type: 'line',
                     data: {
-                        labels: this.data.vendasPorDia?.map(d => d.data) || ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'],
+                        labels: labels,
                         datasets: [{
                             label: 'Vendas (R$)',
-                            data: this.data.vendasPorDia?.map(d => d.total) || [0,0,0,0,0,0,0],
+                            data: dados,
                             borderColor: '#c4a747',
                             backgroundColor: 'rgba(196, 167, 71, 0.1)',
                             borderWidth: 3,
@@ -468,20 +474,29 @@ const DashboardAdmin = {
                             pointBackgroundColor: '#c4a747',
                             pointBorderColor: '#fff',
                             pointBorderWidth: 2,
-                            pointRadius: 4
+                            pointRadius: 4,
+                            pointHoverRadius: 6
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => `R$ ${context.raw.toFixed(2)}`
+                                }
+                            }
+                        },
                         scales: {
                             y: {
                                 grid: { color: '#2d3540' },
                                 ticks: {
                                     color: '#94a3b8',
                                     callback: (value) => 'R$ ' + value
-                                }
+                                },
+                                beginAtZero: true
                             },
                             x: {
                                 grid: { display: false },
@@ -490,36 +505,53 @@ const DashboardAdmin = {
                         }
                     }
                 });
+                console.log('✅ Gráfico de vendas criado');
             } catch (e) {
                 console.error('Erro ao criar gráfico de vendas:', e);
             }
         }
         
+        // Gráfico de Produtos
         const ctxProdutos = document.getElementById('graficoProdutos');
-        if (ctxProdutos && this.data.produtosMaisVendidos.length > 0 && !this.charts.produtos) {
+        if (ctxProdutos && this.data.produtosMaisVendidos && this.data.produtosMaisVendidos.length > 0 && !this.charts.produtos) {
             try {
+                const labels = this.data.produtosMaisVendidos.map(p => 
+                    p.nome.length > 10 ? p.nome.substring(0, 10) + '...' : p.nome
+                );
+                const dados = this.data.produtosMaisVendidos.map(p => p.quantidade);
+                
                 this.charts.produtos = new Chart(ctxProdutos, {
                     type: 'bar',
                     data: {
-                        labels: this.data.produtosMaisVendidos.map(p => 
-                            p.nome.length > 10 ? p.nome.substring(0, 10) + '...' : p.nome
-                        ),
+                        labels: labels,
                         datasets: [{
                             label: 'Quantidade Vendida',
-                            data: this.data.produtosMaisVendidos.map(p => p.quantidade),
+                            data: dados,
                             backgroundColor: '#c4a747',
-                            borderRadius: 6
+                            borderRadius: 6,
+                            barPercentage: 0.7
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => `${context.raw} unidades`
+                                }
+                            }
+                        },
                         scales: {
                             y: {
                                 beginAtZero: true,
                                 grid: { color: '#2d3540' },
-                                ticks: { color: '#94a3b8', stepSize: 1 }
+                                ticks: { 
+                                    color: '#94a3b8', 
+                                    stepSize: 1,
+                                    precision: 0
+                                }
                             },
                             x: {
                                 grid: { display: false },
@@ -528,6 +560,7 @@ const DashboardAdmin = {
                         }
                     }
                 });
+                console.log('✅ Gráfico de produtos criado');
             } catch (e) {
                 console.error('Erro ao criar gráfico de produtos:', e);
             }
@@ -535,17 +568,27 @@ const DashboardAdmin = {
     },
     
     atualizarGraficos() {
-        if (this.charts.vendas && this.data.vendasPorDia) {
+        // Atualizar gráfico de vendas
+        if (this.charts.vendas && this.data.vendasPorDia && this.data.vendasPorDia.length > 0) {
+            this.charts.vendas.data.labels = this.data.vendasPorDia.map(d => d.data);
             this.charts.vendas.data.datasets[0].data = this.data.vendasPorDia.map(d => d.total);
             this.charts.vendas.update();
+            console.log('🔄 Gráfico de vendas atualizado');
+        } else if (!this.charts.vendas) {
+            // Se o gráfico não existe, criar
+            this.inicializarGraficos();
         }
         
-        if (this.charts.produtos && this.data.produtosMaisVendidos.length > 0) {
+        // Atualizar gráfico de produtos
+        if (this.charts.produtos && this.data.produtosMaisVendidos && this.data.produtosMaisVendidos.length > 0) {
             this.charts.produtos.data.labels = this.data.produtosMaisVendidos.map(p => 
                 p.nome.length > 10 ? p.nome.substring(0, 10) + '...' : p.nome
             );
             this.charts.produtos.data.datasets[0].data = this.data.produtosMaisVendidos.map(p => p.quantidade);
             this.charts.produtos.update();
+            console.log('🔄 Gráfico de produtos atualizado');
+        } else if (this.data.produtosMaisVendidos && this.data.produtosMaisVendidos.length > 0 && !this.charts.produtos) {
+            this.inicializarGraficos();
         }
     },
     
@@ -558,6 +601,7 @@ const DashboardAdmin = {
                 newCanvas.id = id;
                 newCanvas.style.width = '100%';
                 newCanvas.style.height = '100%';
+                newCanvas.style.maxHeight = '300px';
                 parent.replaceChild(newCanvas, oldCanvas);
             }
         };
@@ -590,7 +634,7 @@ const DashboardAdmin = {
         const container = document.getElementById('produtoMaisVendido');
         if (!container) return;
         
-        if (this.data.produtosMaisVendidos.length > 0) {
+        if (this.data.produtosMaisVendidos && this.data.produtosMaisVendidos.length > 0) {
             const top3 = this.data.produtosMaisVendidos.slice(0, 3);
             container.innerHTML = `
                 <div style="padding: 10px;">
@@ -612,7 +656,7 @@ const DashboardAdmin = {
         if (!tbody) return;
         
         if (!this.data.ultimasVendas || this.data.ultimasVendas.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">Nenhuma venda recente</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">Nenhuma venda recente<\/td><\/tr>';
             return;
         }
         
@@ -622,13 +666,12 @@ const DashboardAdmin = {
                 <td>${new Date(v.data_venda).toLocaleString('pt-BR')}</td>
                 <td>${UI.formatCurrency(v.total)}</td>
                 <td><span class="badge badge-success">${v.forma_pagamento || 'N/A'}</span></td>
-            </tr>
+            <\/tr>
         `).join('');
     },
     
     configurarAtualizacao() {
         if (this.refreshInterval) clearInterval(this.refreshInterval);
-        // Atualizar a cada 60 segundos
         this.refreshInterval = setInterval(() => {
             if (document.visibilityState === 'visible' && !this.loading && !this.isDestroyed) {
                 this.carregarDados();
