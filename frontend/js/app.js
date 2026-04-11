@@ -1567,7 +1567,7 @@ const Produtos = {
 };
 
 // ============================================
-// MÓDULO DE VENDAS - VERSÃO OTIMIZADA (SEM LOGS PESADOS)
+// MÓDULO DE VENDAS - VERSÃO COMPLETA FUNCIONANDO
 // ============================================
 const Vendas = {
     carrinho: [],
@@ -1581,6 +1581,7 @@ const Vendas = {
         this.setupEventListeners();
         this.atualizarCarrinho();
         this.verificarCaixa();
+        console.log('✅ Módulo de vendas inicializado com', this.produtos.length, 'produtos');
     },
     
     async verificarCaixa() {
@@ -1652,8 +1653,10 @@ const Vendas = {
     async carregarProdutos() {
         try {
             UI.showLoading();
+            console.log('🔄 Carregando produtos da API...');
             const data = await API.listarProdutos({ limit: 1000 });
             this.produtos = data.produtos || [];
+            console.log('📦 Produtos carregados:', this.produtos.length);
             this.renderizarProdutos(this.produtos);
         } catch (error) {
             console.error('Erro ao carregar produtos:', error);
@@ -1675,7 +1678,10 @@ const Vendas = {
     
     renderizarProdutos(produtos) {
         const container = document.getElementById('listaProdutos');
-        if (!container) return;
+        if (!container) {
+            console.error('❌ Container listaProdutos não encontrado!');
+            return;
+        }
         
         if (!produtos || produtos.length === 0) {
             container.innerHTML = `
@@ -1719,7 +1725,7 @@ const Vendas = {
             `;
         }).join('');
         
-        // Adicionar event listeners
+        // Adicionar event listeners para cada card
         const cards = document.querySelectorAll('.produto-card');
         
         cards.forEach(card => {
@@ -1774,10 +1780,12 @@ const Vendas = {
     async buscarProdutoEspecifico(id) {
         try {
             UI.showLoading();
+            console.log(`🔍 Buscando produto específico ID: ${id}`);
             const data = await API.listarProdutos({ limit: 1000 });
             this.produtos = data.produtos || [];
             const produto = this.produtos.find(p => p.id === id);
             if (produto) {
+                console.log(`✅ Produto ${id} encontrado!`);
                 this.renderizarProdutos(this.produtos);
                 this.adicionarAoCarrinho(id);
             } else {
@@ -2033,6 +2041,7 @@ const Vendas = {
             this.atualizarCarrinho();
             
             if (formaPagamentoSelect) formaPagamentoSelect.value = '';
+            this.formaPagamento = '';
             
             await this.carregarProdutos();
             await this.verificarCaixa();
